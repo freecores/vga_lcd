@@ -37,22 +37,29 @@
 
 //  CVS Log
 //
-//  $Id: vga_cur_cregs.v,v 1.2 2002-03-04 16:05:52 rherveille Exp $
+//  $Id: vga_cur_cregs.v,v 1.3 2003-05-07 09:48:54 rherveille Exp $
 //
-//  $Date: 2002-03-04 16:05:52 $
-//  $Revision: 1.2 $
+//  $Date: 2003-05-07 09:48:54 $
+//  $Revision: 1.3 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.2  2002/03/04 16:05:52  rherveille
+//               Added hardware cursor support to wishbone master.
+//               Added provision to turn-off 3D cursors.
+//               Fixed some minor bugs.
+//
 //               Revision 1.1  2002/03/04 11:01:59  rherveille
 //               Added 64x64pixels 4bpp hardware cursor support.
 //
 //
 
+//synopsys translate_off
 `include "timescale.v"
+//synopsys translate_on
 
 module vga_cur_cregs (
 	clk_i, rst_i, arst_i,

@@ -37,18 +37,26 @@
 
 //  CVS Log
 //
-//  $Id: vga_csm_pb.v,v 1.6 2002-02-07 05:42:10 rherveille Exp $
+//  $Id: vga_csm_pb.v,v 1.7 2003-05-07 09:48:54 rherveille Exp $
 //
-//  $Date: 2002-02-07 05:42:10 $
-//  $Revision: 1.6 $
+//  $Date: 2003-05-07 09:48:54 $
+//  $Revision: 1.7 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.6  2002/02/07 05:42:10  rherveille
+//               Fixed some bugs discovered by modified testbench
+//               Removed / Changed some strange logic constructions
+//               Started work on hardware cursor support (not finished yet)
+//               Changed top-level name to vga_enh_top.v
+//
 
+//synopsys translate_off
 `include "timescale.v"
+//synopsys translate_on
 
 module vga_csm_pb (clk_i, req0_i, ack0_o, adr0_i, dat0_i, dat0_o, we0_i, req1_i, ack1_o, adr1_i, dat1_i, dat1_o, we1_i);
 		

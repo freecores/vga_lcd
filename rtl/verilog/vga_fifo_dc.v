@@ -37,19 +37,25 @@
 
 //  CVS Log
 //
-//  $Id: vga_fifo_dc.v,v 1.4 2002-01-28 03:47:16 rherveille Exp $
+//  $Id: vga_fifo_dc.v,v 1.5 2003-05-07 09:48:54 rherveille Exp $
 //
-//  $Date: 2002-01-28 03:47:16 $
-//  $Revision: 1.4 $
+//  $Date: 2003-05-07 09:48:54 $
+//  $Revision: 1.5 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.4  2002/01/28 03:47:16  rherveille
+//               Changed counter-library.
+//               Changed vga-core.
+//               Added 32bpp mode.
+//
 
-
+//synopsys translate_off
 `include "timescale.v"
+//synopsys translate_on
 
 module vga_fifo_dc (rclk, wclk, aclr, wreq, d, rreq, q, rd_empty, rd_full, wr_empty, wr_full);
 

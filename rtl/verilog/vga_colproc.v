@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: vga_colproc.v,v 1.7 2002-03-04 11:01:59 rherveille Exp $
+//  $Id: vga_colproc.v,v 1.8 2003-05-07 09:48:54 rherveille Exp $
 //
-//  $Date: 2002-03-04 11:01:59 $
-//  $Revision: 1.7 $
+//  $Date: 2003-05-07 09:48:54 $
+//  $Revision: 1.8 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.7  2002/03/04 11:01:59  rherveille
+//               Added 64x64pixels 4bpp hardware cursor support.
+//
 //               Revision 1.6  2002/02/07 05:42:10  rherveille
 //               Fixed some bugs discovered by modified testbench
 //               Removed / Changed some strange logic constructions
@@ -54,12 +57,15 @@
 //               Changed top-level name to vga_enh_top.v
 //
 
+//synopsys translate_off
 `include "timescale.v"
+//synopsys translate_on
 
 module vga_colproc(clk, srst, vdat_buffer_di, ColorDepth, PseudoColor, 
-						vdat_buffer_empty, vdat_buffer_rreq, rgb_fifo_full,
-						rgb_fifo_wreq, r, g, b, 
-						clut_req, clut_ack, clut_offs, clut_q);
+	vdat_buffer_empty, vdat_buffer_rreq, rgb_fifo_full,
+	rgb_fifo_wreq, r, g, b,
+	clut_req, clut_ack, clut_offs, clut_q
+	);
 
 	//
 	// inputs & outputs
@@ -103,7 +109,7 @@ module vga_colproc(clk, srst, vdat_buffer_di, ColorDepth, PseudoColor,
 	//
 
 	// store word from pixelbuffer / wishbone input
-	always@(posedge clk)
+	always @(posedge clk)
 		if (vdat_buffer_rreq)
 			DataBuffer <= #1 vdat_buffer_di;
 
@@ -124,7 +130,7 @@ module vga_colproc(clk, srst, vdat_buffer_di, ColorDepth, PseudoColor,
 	reg [6:0] nxt_state; // synopsys enum_state
 
 	// next state decoder
-	always@(c_state or vdat_buffer_empty or ColorDepth or PseudoColor or rgb_fifo_full or colcnt or clut_ack)
+	always @(c_state or vdat_buffer_empty or ColorDepth or PseudoColor or rgb_fifo_full or colcnt or clut_ack)
 	begin : nxt_state_decoder
 		// initial value
 		nxt_state = c_state;
@@ -224,7 +230,7 @@ module vga_colproc(clk, srst, vdat_buffer_di, ColorDepth, PseudoColor,
 	end // next state decoder
 
 	// generate state registers
-	always@(posedge clk)
+	always @(posedge clk)
 			if (srst)
 				c_state <= #1 idle;
 			else
@@ -236,7 +242,7 @@ module vga_colproc(clk, srst, vdat_buffer_di, ColorDepth, PseudoColor,
 	reg [7:0] iR, iG, iB, iRa, iGa, iBa;
 
 	// output decoder
-	always@(c_state or vdat_buffer_empty or colcnt or DataBuffer or rgb_fifo_full or clut_ack or clut_q or Ba or Ga or Ra)
+	always @(c_state or vdat_buffer_empty or colcnt or DataBuffer or rgb_fifo_full or clut_ack or clut_q or Ba or Ga or Ra)
 	begin : output_decoder
 
 		// initial values
@@ -449,7 +455,7 @@ module vga_colproc(clk, srst, vdat_buffer_di, ColorDepth, PseudoColor,
 	end // output decoder
 
 	// generate output registers
-	always@(posedge clk)
+	always @(posedge clk)
 		begin
 			r  <= #1 iR;
 			g  <= #1 iG;
@@ -477,23 +483,23 @@ module vga_colproc(clk, srst, vdat_buffer_di, ColorDepth, PseudoColor,
 	end
 
 	// assign clut offset
-	always@(colcnt or DataBuffer)
-		case (colcnt) // synopsis full_case parallel_case
-			2'b11: clut_offs = DataBuffer[31:24];
-			2'b10: clut_offs = DataBuffer[23:16];
-			2'b01: clut_offs = DataBuffer[15: 8];
-			2'b00: clut_offs = DataBuffer[ 7: 0];
-		endcase
+	always @(colcnt or DataBuffer)
+	  case (colcnt) // synopsis full_case parallel_case
+	      2'b11: clut_offs = DataBuffer[31:24];
+	      2'b10: clut_offs = DataBuffer[23:16];
+	      2'b01: clut_offs = DataBuffer[15: 8];
+	      2'b00: clut_offs = DataBuffer[ 7: 0];
+	  endcase
 
 
 	//
 	// color counter
 	//
-	always@(posedge clk)
-		if(srst)
-			colcnt <= #1 2'b11;
-		else if (RGBbuf_wreq)
-			colcnt <= #1 colcnt -2'h1;
+	always @(posedge clk)
+	  if (srst)
+	    colcnt <= #1 2'b11;
+	  else if (RGBbuf_wreq)
+	    colcnt <= #1 colcnt -2'h1;
 endmodule
 
 

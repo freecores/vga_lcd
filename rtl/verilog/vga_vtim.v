@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: vga_vtim.v,v 1.7 2003-03-19 12:50:45 rherveille Exp $
+//  $Id: vga_vtim.v,v 1.8 2003-05-07 09:48:54 rherveille Exp $
 //
-//  $Date: 2003-03-19 12:50:45 $
-//  $Revision: 1.7 $
+//  $Date: 2003-05-07 09:48:54 $
+//  $Revision: 1.8 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.7  2003/03/19 12:50:45  rherveille
+//               Changed timing generator; made it smaller and easier.
+//
 //               Revision 1.6  2002/04/20 10:02:39  rherveille
 //               Changed video timing generator.
 //               Changed wishbone master vertical gate count code.
@@ -58,7 +61,9 @@
 //               Added 32bpp mode.
 //
 
+//synopsys translate_off
 `include "timescale.v"
+//synopsys translate_on
 
 module vga_vtim(clk, ena, rst, Tsync, Tgdel, Tgate, Tlen, Sync, Gate, Done);
 	// inputs & outputs
@@ -77,13 +82,6 @@ module vga_vtim(clk, ena, rst, Tsync, Tgdel, Tgate, Tlen, Sync, Gate, Done);
 	reg Sync;
 	reg Gate;
 	reg Done;
-
-	//
-	// variable declarations
-	//
-
-	wire Dsync, Dgdel, Dgate, Dlen;
-	reg go, drst;
 
 	//
 	// module body
@@ -124,7 +122,7 @@ module vga_vtim(clk, ena, rst, Tsync, Tgdel, Tgate, Tlen, Sync, Gate, Done);
 
 	        Done    <= #1 1'b0;
 
-	        case (state)
+	        case (state) // synopsys full_case parallel_case
 	          idle_state:
 	            begin
 	                state   <= #1 sync_state;

@@ -37,16 +37,21 @@
 
 //  CVS Log
 //
-//  $Id: vga_wb_slave.v,v 1.11 2002-04-20 10:02:39 rherveille Exp $
+//  $Id: vga_wb_slave.v,v 1.12 2003-05-07 09:48:54 rherveille Exp $
 //
-//  $Date: 2002-04-20 10:02:39 $
-//  $Revision: 1.11 $
+//  $Date: 2003-05-07 09:48:54 $
+//  $Revision: 1.12 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.11  2002/04/20 10:02:39  rherveille
+//               Changed video timing generator.
+//               Changed wishbone master vertical gate count code.
+//               Fixed a potential bug in the wishbone slave (cursor color register readout).
+//
 //               Revision 1.10  2002/03/28 04:59:25  rherveille
 //               Fixed two small bugs that only showed up when the hardware cursors were disabled
 //
@@ -68,16 +73,20 @@
 //               Changed top-level name to vga_enh_top.v
 //
 
-
+//synopsys translate_off
 `include "timescale.v"
+//synopsys translate_on
 `include "vga_defines.v"
 
-module vga_wb_slave(clk_i, rst_i, arst_i, adr_i, dat_i, dat_o, sel_i, we_i, stb_i, cyc_i, ack_o, err_o, inta_o,
-		bl, csl, vsl, hsl, pc, cd, vbl, cbsw, vbsw, ven, avmp, acmp, 
-		cursor0_res, cursor0_en, cursor0_xy, cursor0_ba, cursor0_ld, cc0_adr_i, cc0_dat_o, 
-		cursor1_res, cursor1_en, cursor1_xy, cursor1_ba, cursor1_ld, cc1_adr_i, cc1_dat_o,
-		vbsint_in, cbsint_in, hint_in, vint_in, luint_in, sint_in,
-		Thsync, Thgdel, Thgate, Thlen, Tvsync, Tvgdel, Tvgate, Tvlen, VBARa, VBARb, clut_acc, clut_ack, clut_q);
+module vga_wb_slave(
+	clk_i, rst_i, arst_i, adr_i, dat_i, dat_o, sel_i, we_i, stb_i, cyc_i, ack_o, rty_o, err_o, inta_o,
+	wbm_busy, dvi_odf, bl, csl, vsl, hsl, pc, cd, vbl, cbsw, vbsw, ven, avmp, acmp,
+	cursor0_res, cursor0_en, cursor0_xy, cursor0_ba, cursor0_ld, cc0_adr_i, cc0_dat_o,
+	cursor1_res, cursor1_en, cursor1_xy, cursor1_ba, cursor1_ld, cc1_adr_i, cc1_dat_o,
+	vbsint_in, cbsint_in, hint_in, vint_in, luint_in, sint_in,
+	Thsync, Thgdel, Thgate, Thlen, Tvsync, Tvgdel, Tvgate, Tvlen, VBARa, VBARb,
+	clut_acc, clut_ack, clut_q
+	);
 
 	//
 	// inputs & outputs
@@ -97,22 +106,28 @@ module vga_wb_slave(clk_i, rst_i, arst_i, adr_i, dat_i, dat_o, sel_i, we_i, stb_
 	input         cyc_i;
 	output        ack_o;
 	reg ack_o;
+	output        rty_o;
+	reg rty_o;
 	output        err_o;
 	reg err_o;
 	output        inta_o;
 	reg inta_o;
 
+	// wishbone master controller feedback
+	input  wbm_busy;             // data transfer in progress
+
 	// control register settings
-	output bl;         // blanking level
-	output csl;        // composite sync level
-	output vsl;        // vsync level
-	output hsl;        // hsync level
-	output pc;         // pseudo color
-	output [1:0] cd;   // color depth
-	output [1:0] vbl;  // video memory burst length
-	output cbsw;       // clut bank switch enable
-	output vbsw;       // video memory bank switch enable
-	output ven;        // video system enable
+	output [1:0] dvi_odf;        // DVI output data format
+	output bl;                   // blanking level
+	output csl;                  // composite sync level
+	output vsl;                  // vsync level
+	output hsl;                  // hsync level
+	output pc;                   // pseudo color
+	output [1:0] cd;             // color depth
+	output [1:0] vbl;            // video memory burst length
+	output cbsw;                 // clut bank switch enable
+	output vbsw;                 // video memory bank switch enable
+	output ven;                  // video system enable
 
 	// hardware cursor settings
 	output         cursor0_res;  // cursor0 resolution
@@ -211,125 +226,127 @@ module vga_wb_slave(clk_i, rst_i, arst_i, adr_i, dat_i, dat_o, sel_i, we_i, stb_
 	assign acc      =  cyc_i & stb_i;
 	assign acc32    = (sel_i == 4'b1111);
 	assign clut_acc =  CLUT_ADR & acc & acc32;
-	assign reg_acc  = !CLUT_ADR & acc & acc32;
+	assign reg_acc  = ~CLUT_ADR & acc & acc32;
 	assign reg_wacc =  reg_acc & we_i;
 
-	assign cc0_acc  = CCR0_ADR & acc & acc32;
-	assign cc1_acc  = CCR1_ADR & acc & acc32;
+	assign cc0_acc  = (REG_ADR == CCR0_ADR) & acc & acc32;
+	assign cc1_acc  = (REG_ADR == CCR1_ADR) & acc & acc32;
 
-	always@(posedge clk_i)
-		ack_o <= #1 ((reg_acc & acc32) | clut_ack) & !ack_o;
+	always @(posedge clk_i)
+	  ack_o <= #1 ((reg_acc & acc32) | clut_ack) & ~(wbm_busy & REG_ADR == CTRL_ADR) & ~ack_o ;
 
-	always@(posedge clk_i)
-		err_o <= #1 acc & !acc32 & !err_o;
+	always @(posedge clk_i)
+	  rty_o <= #1 ((reg_acc & acc32) | clut_ack) & (wbm_busy & REG_ADR == CTRL_ADR) & ~rty_o ;
+
+	always @(posedge clk_i)
+	  err_o <= #1 acc & ~acc32 & ~err_o;
 
 
 	// generate registers
-	always@(posedge clk_i or negedge arst_i)
+	always @(posedge clk_i or negedge arst_i)
 	begin : gen_regs
-		if(!arst_i)
-			begin
-				htim       <= #1 0;
-				vtim       <= #1 0;
-				hvlen      <= #1 0;
-				VBARa      <= #1 0;
-				VBARb      <= #1 0;
-				cursor0_xy <= #1 0;
-				cursor0_ba <= #1 0;
-				cursor1_xy <= #1 0;
-				cursor1_ba <= #1 0;
-			end
-		else if (rst_i)
-			begin
-				htim       <= #1 0;
-				vtim       <= #1 0;
-				hvlen      <= #1 0;
-				VBARa      <= #1 0;
-				VBARb      <= #1 0;
-				cursor0_xy <= #1 0;
-				cursor0_ba <= #1 0;
-				cursor1_xy <= #1 0;
-				cursor1_ba <= #1 0;
-			end
-		else if (reg_wacc)
-			case (adr_i)	// synopsis full_case parallel_case
-				HTIM_ADR  : htim       <= #1 dat_i;
-				VTIM_ADR  : vtim       <= #1 dat_i;
-				HVLEN_ADR : hvlen      <= #1 dat_i;
-				VBARA_ADR : VBARa      <= #1 dat_i[31: 2];
-				VBARB_ADR : VBARb      <= #1 dat_i[31: 2];
-				C0XY_ADR  : cursor0_xy <= #1 dat_i[31: 0];
-				C0BAR_ADR : cursor0_ba <= #1 dat_i[31:11];
-				C1XY_ADR  : cursor1_xy <= #1 dat_i[31: 0];
-				C1BAR_ADR : cursor1_ba <= #1 dat_i[31:11];
-			endcase
+	  if (!arst_i)
+	    begin
+	        htim       <= #1 0;
+	        vtim       <= #1 0;
+	        hvlen      <= #1 0;
+	        VBARa      <= #1 0;
+	        VBARb      <= #1 0;
+	        cursor0_xy <= #1 0;
+	        cursor0_ba <= #1 0;
+	        cursor1_xy <= #1 0;
+	        cursor1_ba <= #1 0;
+	    end
+	  else if (rst_i)
+	    begin
+	        htim       <= #1 0;
+	        vtim       <= #1 0;
+	        hvlen      <= #1 0;
+	        VBARa      <= #1 0;
+	        VBARb      <= #1 0;
+	        cursor0_xy <= #1 0;
+	        cursor0_ba <= #1 0;
+	        cursor1_xy <= #1 0;
+	        cursor1_ba <= #1 0;
+	    end
+	  else if (reg_wacc)
+	    case (adr_i) // synopsis full_case parallel_case
+	        HTIM_ADR  : htim       <= #1 dat_i;
+	        VTIM_ADR  : vtim       <= #1 dat_i;
+	        HVLEN_ADR : hvlen      <= #1 dat_i;
+	        VBARA_ADR : VBARa      <= #1 dat_i[31: 2];
+	        VBARB_ADR : VBARb      <= #1 dat_i[31: 2];
+	        C0XY_ADR  : cursor0_xy <= #1 dat_i[31: 0];
+	        C0BAR_ADR : cursor0_ba <= #1 dat_i[31:11];
+	        C1XY_ADR  : cursor1_xy <= #1 dat_i[31: 0];
+	        C1BAR_ADR : cursor1_ba <= #1 dat_i[31:11];
+	    endcase
 	end
 
-	always@(posedge clk_i)
-		begin
-			cursor0_ld <= #1 reg_wacc && (adr_i == C0BAR_ADR);
-			cursor1_ld <= #1 reg_wacc && (adr_i == C1BAR_ADR);
-		end
+	always @(posedge clk_i)
+	  begin
+	     cursor0_ld <= #1 reg_wacc && (adr_i == C0BAR_ADR);
+	     cursor1_ld <= #1 reg_wacc && (adr_i == C1BAR_ADR);
+	  end
 
 	// generate control register
-	always@(posedge clk_i or negedge arst_i)
-		if (!arst_i)
-			ctrl <= #1 0;
-		else if (rst_i)
-			ctrl <= #1 0;
-		else if (reg_wacc & (REG_ADR == CTRL_ADR) )
-			ctrl <= #1 dat_i;
-		else
-			begin
-				ctrl[6] <= #1 ctrl[6] & !cbsint_in;
-				ctrl[5] <= #1 ctrl[5] & !vbsint_in;
-			end
+	always @(posedge clk_i or negedge arst_i)
+	  if (!arst_i)
+	    ctrl <= #1 0;
+	  else if (rst_i)
+	    ctrl <= #1 0;
+	  else if (reg_wacc & (REG_ADR == CTRL_ADR) & ~wbm_busy )
+	    ctrl <= #1 dat_i;
+	  else begin
+	    ctrl[6] <= #1 ctrl[6] & !cbsint_in;
+	    ctrl[5] <= #1 ctrl[5] & !vbsint_in;
+	  end
 
 
 	// generate status register
-	always@(posedge clk_i or negedge arst_i)
-		if (!arst_i)
-			stat <= #1 0;
-		else if (rst_i)
-			stat <= #1 0;
-		else
-			begin
-				`ifdef VGA_HWC1
-					stat[21] <= #1 1'b1;
-				`else
-					stat[21] <= #1 1'b0;
-				`endif
-				`ifdef VGA_HWC0
-					stat[20] <= #1 1'b1;
-				`else
-					stat[20] <= #1 1'b0;
-				`endif
+	always @(posedge clk_i or negedge arst_i)
+	  if (!arst_i)
+	    stat <= #1 0;
+	  else if (rst_i)
+	    stat <= #1 0;
+	  else begin
+	    `ifdef VGA_HWC1
+	        stat[21] <= #1 1'b1;
+	    `else
+	        stat[21] <= #1 1'b0;
+	    `endif
+	    `ifdef VGA_HWC0
+	        stat[20] <= #1 1'b1;
+	    `else
+	        stat[20] <= #1 1'b0;
+	    `endif
 
-				stat[17] <= #1 acmp;
-				stat[16] <= #1 avmp;
+	    stat[17] <= #1 acmp;
+	    stat[16] <= #1 avmp;
 
-				if (reg_wacc & (REG_ADR == STAT_ADR) )
-					begin
-						stat[7] <= #1 cbsint_in | (stat[7] & !dat_i[7]);
-						stat[6] <= #1 vbsint_in | (stat[6] & !dat_i[6]);
-						stat[5] <= #1 hint_in   | (stat[5] & !dat_i[5]);
-						stat[4] <= #1 vint_in   | (stat[4] & !dat_i[4]);
-						stat[1] <= #1 luint_in  | (stat[3] & !dat_i[1]);
-						stat[0] <= #1 sint_in   | (stat[0] & !dat_i[0]);
-					end
-				else
-					begin
-						stat[7] <= #1 stat[7] | cbsint_in;
-						stat[6] <= #1 stat[6] | vbsint_in;
-						stat[5] <= #1 stat[5] | hint_in;
-						stat[4] <= #1 stat[4] | vint_in;
-						stat[1] <= #1 stat[1] | luint_in;
-						stat[0] <= #1 stat[0] | sint_in;
-					end
-			end
+	    if (reg_wacc & (REG_ADR == STAT_ADR) )
+	      begin
+	          stat[7] <= #1 cbsint_in | (stat[7] & !dat_i[7]);
+	          stat[6] <= #1 vbsint_in | (stat[6] & !dat_i[6]);
+	          stat[5] <= #1 hint_in   | (stat[5] & !dat_i[5]);
+	          stat[4] <= #1 vint_in   | (stat[4] & !dat_i[4]);
+	          stat[1] <= #1 luint_in  | (stat[3] & !dat_i[1]);
+	          stat[0] <= #1 sint_in   | (stat[0] & !dat_i[0]);
+	      end
+	    else
+	      begin
+	          stat[7] <= #1 stat[7] | cbsint_in;
+	          stat[6] <= #1 stat[6] | vbsint_in;
+	          stat[5] <= #1 stat[5] | hint_in;
+	          stat[4] <= #1 stat[4] | vint_in;
+	          stat[1] <= #1 stat[1] | luint_in;
+	          stat[0] <= #1 stat[0] | sint_in;
+	      end
+	  end
 
 
 	// decode control register
+	assign dvi_odf     = ctrl[29:28];
 	assign cursor1_res = ctrl[25];
 	assign cursor1_en  = ctrl[24];
 	assign cursor0_res = ctrl[23];
@@ -410,33 +427,33 @@ module vga_wb_slave(clk_i, rst_i, arst_i, adr_i, dat_i, dat_o, sel_i, we_i, stb_
 		assign cc1_dat_o = 32'h0;
 	`endif
 
-	
-	// assign output
-	always@(REG_ADR or ctrl or stat or htim or vtim or hvlen or VBARa or VBARb or acmp or
-		cursor0_xy or cursor0_ba or cursor1_xy or cursor1_ba or ccr0_dat_o or ccr1_dat_o)
-	casez (REG_ADR) // synopsis full_case parallel_case
-		CTRL_ADR  : reg_dato = ctrl;
-		STAT_ADR  : reg_dato = stat;
-		HTIM_ADR  : reg_dato = htim;
-		VTIM_ADR  : reg_dato = vtim;
-		HVLEN_ADR : reg_dato = hvlen;
-		VBARA_ADR : reg_dato = {VBARa, 2'b0};
-		VBARB_ADR : reg_dato = {VBARb, 2'b0};
-		C0XY_ADR  : reg_dato = cursor0_xy;
-		C0BAR_ADR : reg_dato = {cursor0_ba, 11'h0};
-		CCR0_ADR  : reg_dato = ccr0_dat_o;
-		C1XY_ADR  : reg_dato = cursor1_xy;
-		C1BAR_ADR : reg_dato = {cursor1_ba, 11'h0};
-		CCR1_ADR  : reg_dato = ccr1_dat_o;
-		default   : reg_dato = 32'h0000_0000;
-	endcase
 
-	always@(posedge clk_i)
-		dat_o <= #1 reg_acc ? reg_dato : {8'h0, clut_q};
+	// assign output
+	always @(REG_ADR or ctrl or stat or htim or vtim or hvlen or VBARa or VBARb or acmp or
+		cursor0_xy or cursor0_ba or cursor1_xy or cursor1_ba or ccr0_dat_o or ccr1_dat_o)
+	  casez (REG_ADR) // synopsis full_case parallel_case
+	      CTRL_ADR  : reg_dato = ctrl;
+	      STAT_ADR  : reg_dato = stat;
+	      HTIM_ADR  : reg_dato = htim;
+	      VTIM_ADR  : reg_dato = vtim;
+	      HVLEN_ADR : reg_dato = hvlen;
+	      VBARA_ADR : reg_dato = {VBARa, 2'b0};
+	      VBARB_ADR : reg_dato = {VBARb, 2'b0};
+	      C0XY_ADR  : reg_dato = cursor0_xy;
+	      C0BAR_ADR : reg_dato = {cursor0_ba, 11'h0};
+	      CCR0_ADR  : reg_dato = ccr0_dat_o;
+	      C1XY_ADR  : reg_dato = cursor1_xy;
+	      C1BAR_ADR : reg_dato = {cursor1_ba, 11'h0};
+	      CCR1_ADR  : reg_dato = ccr1_dat_o;
+	      default   : reg_dato = 32'h0000_0000;
+	  endcase
+
+	always @(posedge clk_i)
+	  dat_o <= #1 reg_acc ? reg_dato : {8'h0, clut_q};
 
 	// generate interrupt request signal
-	always@(posedge clk_i)
-		inta_o <= #1 (hint & hie) | (vint & vie) | (vbsint & vbsie) | (cbsint & cbsie) | luint | sint;
+	always @(posedge clk_i)
+	  inta_o <= #1 (hint & hie) | (vint & vie) | (vbsint & vbsie) | (cbsint & cbsie) | luint | sint;
 endmodule
 
 

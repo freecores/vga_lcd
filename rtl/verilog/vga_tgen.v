@@ -37,56 +37,64 @@
 
 //  CVS Log
 //
-//  $Id: vga_tgen.v,v 1.4 2002-01-28 03:47:16 rherveille Exp $
+//  $Id: vga_tgen.v,v 1.5 2003-05-07 09:48:54 rherveille Exp $
 //
-//  $Date: 2002-01-28 03:47:16 $
-//  $Revision: 1.4 $
+//  $Date: 2003-05-07 09:48:54 $
+//  $Revision: 1.5 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.4  2002/01/28 03:47:16  rherveille
+//               Changed counter-library.
+//               Changed vga-core.
+//               Added 32bpp mode.
+//
 
+//synopsys translate_off
 `include "timescale.v"
+//synopsys translate_on
 
-module vga_tgen(clk, rst, HSyncL, Thsync, Thgdel, Thgate, Thlen, VSyncL, Tvsync, Tvgdel, Tvgate, Tvlen, CSyncL, BlankL,
-		eol, eof, gate, Hsync, Vsync, Csync, Blank);
+module vga_tgen(
+	clk, clk_ena, rst,
+	Thsync, Thgdel, Thgate, Thlen, Tvsync, Tvgdel, Tvgate, Tvlen,
+	eol, eof, gate, hsync, vsync, csync, blank
+	);
+
 	// inputs & outputs
 	input clk;
+	input clk_ena;
 	input rst;
+
 	// horizontal timing settings inputs
-	input        HSyncL; // horizontal sync pulse polarization level (pos/neg)
 	input [ 7:0] Thsync; // horizontal sync pule width (in pixels)
 	input [ 7:0] Thgdel; // horizontal gate delay
 	input [15:0] Thgate; // horizontal gate (number of visible pixels per line)
 	input [15:0] Thlen;  // horizontal length (number of pixels per line)
+
 	// vertical timing settings inputs
-	input        VSyncL; // vertical sync pulse polarization level (pos/neg)
 	input [ 7:0] Tvsync; // vertical sync pule width (in pixels)
 	input [ 7:0] Tvgdel; // vertical gate delay
 	input [15:0] Tvgate; // vertical gate (number of visible pixels per line)
 	input [15:0] Tvlen;  // vertical length (number of pixels per line)
-
-	input        CSyncL; // composite sync level (pos/neg)
-	input        BlankL; // blanking level
 
 	// outputs
 	output eol;  // end of line
 	output eof;  // end of frame
 	output gate; // vertical AND horizontal gate (logical AND function)
 
-	output Hsync; // horizontal sync pulse
-	output Vsync; // vertical sync pulse
-	output Csync; // composite sync
-	output Blank; // blank signal	
+	output hsync; // horizontal sync pulse
+	output vsync; // vertical sync pulse
+	output csync; // composite sync
+	output blank; // blank signal
 
 	//
 	// variable declarations
 	//
 	wire Hgate, Vgate;
 	wire Hdone;
-	wire iHsync, iVsync;
 
 	//
 	// module body
@@ -95,36 +103,37 @@ module vga_tgen(clk, rst, HSyncL, Thsync, Thgdel, Thgate, Thlen, VSyncL, Tvsync,
 	// hookup horizontal timing generator
 	vga_vtim hor_gen(
 		.clk(clk),
-		.ena(1'b1),
+		.ena(clk_ena),
 		.rst(rst),
 		.Tsync(Thsync),
 		.Tgdel(Thgdel),
 		.Tgate(Thgate),
 		.Tlen(Thlen),
-		.Sync(iHsync),
+		.Sync(hsync),
 		.Gate(Hgate),
-		.Done(Hdone));
+		.Done(Hdone)
+	);
 
 
 	// hookup vertical timing generator
+	wire vclk_ena = Hdone & clk_ena;
+
 	vga_vtim ver_gen(
 		.clk(clk),
-		.ena(Hdone),
+		.ena(vclk_ena),
 		.rst(rst),
 		.Tsync(Tvsync),
 		.Tgdel(Tvgdel),
 		.Tgate(Tvgate),
 		.Tlen(Tvlen),
-		.Sync(iVsync),
+		.Sync(vsync),
 		.Gate(Vgate),
-		.Done(eof));
+		.Done(eof)
+	);
 
 	// assign outputs
 	assign eol  = Hdone;
 	assign gate = Hgate & Vgate;
-
-	assign Hsync = iHsync ^ HSyncL;
-	assign Vsync = iVsync ^ VSyncL;
-	assign Csync = (iHsync | iVsync) ^ CSyncL;
-	assign Blank = !(gate ^ BlankL);
+	assign csync = hsync | vsync;
+	assign blank = ~gate;
 endmodule

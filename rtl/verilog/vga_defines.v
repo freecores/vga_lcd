@@ -37,26 +37,55 @@
 
 //  CVS Log
 //
-//  $Id: vga_defines.v,v 1.4 2002-02-07 05:42:10 rherveille Exp $
+//  $Id: vga_defines.v,v 1.5 2003-05-07 09:48:54 rherveille Exp $
 //
-//  $Date: 2002-02-07 05:42:10 $
-//  $Revision: 1.4 $
+//  $Date: 2003-05-07 09:48:54 $
+//  $Revision: 1.5 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.4  2002/02/07 05:42:10  rherveille
+//               Fixed some bugs discovered by modified testbench
+//               Removed / Changed some strange logic constructions
+//               Started work on hardware cursor support (not finished yet)
+//               Changed top-level name to vga_enh_top.v
+//
 
+
+////////////////////////
+//
+// Global settings
+//
 
 //
 // define memory vendor
-//
+// for FPGA implementations use `define VENDOR_FPGA
 
 `define VENDOR_FPGA
+
+//
+// enable / disable 12bit DVI output
+// (for use with external DVI transmitters)
+`define VGA_12BIT_DVI
+
+
+////////////////////////
+//
+// Hardware Cursors
+//
 
 //
 // enable / disable hardware cursors
 //
 //`define VGA_HWC0
 //`define VGA_HWC1
+
+
+//
+// enable / disabled 3D support for hardware cursors
+//
+//`define VGA_HWC_3D
+

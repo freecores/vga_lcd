@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: vga_enh_top.v,v 1.3 2003-03-18 21:45:48 rherveille Exp $
+//  $Id: vga_enh_top.v,v 1.4 2003-05-07 09:48:54 rherveille Exp $
 //
-//  $Date: 2003-03-18 21:45:48 $
-//  $Revision: 1.3 $
+//  $Date: 2003-05-07 09:48:54 $
+//  $Revision: 1.4 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.3  2003/03/18 21:45:48  rherveille
+//               Added WISHBONE revB.3 Registered Feedback Cycles support
+//
 //               Revision 1.2  2002/03/04 11:01:59  rherveille
 //               Added 64x64pixels 4bpp hardware cursor support.
 //
@@ -57,13 +60,20 @@
 //               Changed top-level name to vga_enh_top.v
 //
 
+//synopsys translate_off
 `include "timescale.v"
+//synopsys translate_on
 `include "vga_defines.v"
 
-module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o, 
-	wbs_adr_i, wbs_dat_i, wbs_dat_o, wbs_sel_i, wbs_we_i, wbs_stb_i, wbs_cyc_i, wbs_ack_o, wbs_err_o,
+module vga_enh_top (
+	wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
+	wbs_adr_i, wbs_dat_i, wbs_dat_o, wbs_sel_i, wbs_we_i, wbs_stb_i, wbs_cyc_i, wbs_ack_o, wbs_rty_o, wbs_err_o,
 	wbm_adr_o, wbm_dat_i, wbm_cti_o, wbm_bte_o, wbm_sel_o, wbm_we_o, wbm_stb_o, wbm_cyc_o, wbm_ack_i, wbm_err_i,
-	clk_p_i, hsync_pad_o, vsync_pad_o, csync_pad_o, blank_pad_o, r_pad_o, g_pad_o, b_pad_o
+	clk_p_i,
+`ifdef VGA_12BIT_DVI
+	dvi_pclk_p_o, dvi_pclk_m_o, dvi_hsync_o, dvi_vsync_o, dvi_de_o, dvi_d_o,
+`endif
+	clk_p_o, hsync_pad_o, vsync_pad_o, csync_pad_o, blank_pad_o, r_pad_o, g_pad_o, b_pad_o
 	);
 
 	//
@@ -91,8 +101,9 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 	input         wbs_stb_i;     // strobe/select input
 	input         wbs_cyc_i;     // valid bus cycle input
 	output        wbs_ack_o;     // bus cycle acknowledge output
+	output        wbs_rty_o;     // busy cycle retry output
 	output        wbs_err_o;     // bus cycle error output
-		
+
 	// master signals
 	output [31:0] wbm_adr_o;     // addressbus output
 	input  [31:0] wbm_dat_i;     // Master databus input
@@ -100,21 +111,29 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 	output        wbm_we_o;      // write enable output
 	output        wbm_stb_o;     // strobe output
 	output        wbm_cyc_o;     // valid bus cycle output
-	output [ 3:0] wbm_cti_o;     // cycle type identifier
+	output [ 2:0] wbm_cti_o;     // cycle type identifier
 	output [ 1:0] wbm_bte_o;     // burst type extensions
 	input         wbm_ack_i;     // bus cycle acknowledge input
 	input         wbm_err_i;     // bus cycle error input
 
 	// VGA signals
 	input         clk_p_i;                   // pixel clock
+	                                         // in DVI mode this is 2x as high (!!)
+
+	`ifdef VGA_12BIT_DVI
+	    output        dvi_pclk_p_o;          // dvi pclk+
+	    output        dvi_pclk_m_o;          // dvi pclk-
+	    output        dvi_hsync_o;           // dvi hsync
+	    output        dvi_vsync_o;           // dvi vsync
+	    output        dvi_de_o;              // dvi data enable
+	    output [11:0] dvi_d_o;               // dvi 12bit output
+	`endif
+
+	output        clk_p_o;                   // VGA pixel clock output
 	output        hsync_pad_o;               // horizontal sync
-	reg hsync_pad_o;
 	output        vsync_pad_o;               // vertical sync
-	reg vsync_pad_o;
 	output        csync_pad_o;               // composite sync
-	reg csync_pad_o;
 	output        blank_pad_o;               // blanking signal
-	reg blank_pad_o;
 	output [ 7:0] r_pad_o, g_pad_o, b_pad_o; // RGB color signals
 
 	//
@@ -125,11 +144,13 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 	wire arst = rst_i ^ ARST_LVL;
 
 	// from wb_slave
-	wire ctrl_bl, ctrl_csl, ctrl_vsl, ctrl_hsl, ctrl_pc, ctrl_cbsw, ctrl_vbsw, ctrl_ven;
-	wire [ 1: 0] ctrl_cd, ctrl_vbl;
+	wire         ctrl_bl, ctrl_csl, ctrl_vsl, ctrl_hsl, ctrl_pc, ctrl_cbsw, ctrl_vbsw, ctrl_ven;
+	wire [ 1: 0] ctrl_cd, ctrl_vbl, ctrl_dvi_odf;
 	wire [ 7: 0] Thsync, Thgdel, Tvsync, Tvgdel;
 	wire [15: 0] Thgate, Thlen, Tvgate, Tvlen;
 	wire [31: 2] VBARa, VBARb;
+
+	wire [ 8: 0] cursor_adr;
 	wire [31: 0] cursor0_xy, cursor1_xy;
 	wire         cursor0_en, cursor1_en;
 	wire [31:11] cursor0_ba, cursor1_ba;
@@ -139,16 +160,18 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 
 	// to wb_slave
 	wire stat_avmp, stat_acmp, vmem_swint, clut_swint, hint, vint, sint;
+	wire wmb_busy;
 	reg luint;
 	wire [ 3: 0] cc0_adr_i, cc1_adr_i;
 
-	// from pixel generator
-	wire cgate; // composite gate signal
-	wire ihsync, ivsync, icsync, iblank; // intermediate horizontal/vertical/composite sync, intermediate blank
+	// pixel generator
+	wire        fb_data_fifo_rreq, fb_data_fifo_empty;
+	wire [31:0] fb_data_fifo_q;
+	wire        ImDoneFifoQ;
 
 	// line fifo connections
-	wire line_fifo_dpm_wreq, line_fifo_empty_rd;
-	wire [23:0] line_fifo_dpm_d, line_fifo_dpm_q;
+	wire        line_fifo_wreq, line_fifo_rreq, line_fifo_empty_rd;
+	wire [23:0] line_fifo_d, line_fifo_q;
 
 	// clut connections
 	wire        ext_clut_req, ext_clut_ack;
@@ -164,126 +187,112 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 	// hookup wishbone slave
 	vga_wb_slave wbs (
 		// wishbone interface
-		.clk_i(wb_clk_i),
-		.rst_i(wb_rst_i),
-		.arst_i(arst),
-		.adr_i(wbs_adr_i[11:2]),
-		.dat_i(wbs_dat_i),
-		.dat_o(wbs_dat_o),
-		.sel_i(wbs_sel_i),
-		.we_i(wbs_we_i),
-		.stb_i(wbs_stb_i),
-		.cyc_i(wbs_cyc_i),
-		.ack_o(wbs_ack_o),
-		.err_o(wbs_err_o),
-		.inta_o(wb_inta_o),
+		.clk_i       ( wb_clk_i        ),
+		.rst_i       ( wb_rst_i        ),
+		.arst_i      ( arst            ),
+		.adr_i       ( wbs_adr_i[11:2] ),
+		.dat_i       ( wbs_dat_i       ),
+		.dat_o       ( wbs_dat_o       ),
+		.sel_i       ( wbs_sel_i       ),
+		.we_i        ( wbs_we_i        ),
+		.stb_i       ( wbs_stb_i       ),
+		.cyc_i       ( wbs_cyc_i       ),
+		.ack_o       ( wbs_ack_o       ),
+		.rty_o       ( wbs_rty_o       ),
+		.err_o       ( wbs_err_o       ),
+		.inta_o      ( wb_inta_o       ),
 
 		// internal connections
-		.bl(ctrl_bl),               // blank polarization level
-		.csl(ctrl_csl),             // csync polarization level
-		.vsl(ctrl_vsl),             // vsync polarization level
-		.hsl(ctrl_hsl),             // hsync polarization level
-		.pc(ctrl_pc),               // pseudo-color mode (only for 8bpp)
-		.cd(ctrl_cd),               // color depth
-		.vbl(ctrl_vbl),             // video memory burst length
-		.cbsw(ctrl_cbsw),           // color lookup table bank switch enable
-		.vbsw(ctrl_vbsw),           // video bank switch enable
-		.ven(ctrl_ven),             // video enable
-		.acmp(stat_acmp),           // active color lookup table page
-		.avmp(stat_avmp),           // active video memory page
-		.cursor0_res(cursor0_res),  // cursor0 resolution
-		.cursor0_en(cursor0_en),    // cursor0 enable
-		.cursor0_xy(cursor0_xy),    // cursor0 (x,y)
-		.cursor0_ba(cursor0_ba),    // curso0 video memory base address
-		.cursor0_ld(cursor0_ld),    // reload curso0 from video memory
- 		.cc0_adr_i(cc0_adr_i),      // cursor0 color registers address
-		.cc0_dat_o(cc0_dat_o),      // cursor0 color registers data
-		.cursor1_res(cursor1_res),  // cursor1 resolution
-		.cursor1_en(cursor1_en),    // cursor1 enable
-		.cursor1_xy(cursor1_xy),    // cursor1 (x,y)
-		.cursor1_ba(cursor1_ba),    // cursor1 video memory base address
-		.cursor1_ld(cursor1_ld),    // reload cursor1 from video memory
- 		.cc1_adr_i(cc1_adr_i),      // cursor1 color registers address
-		.cc1_dat_o(cc1_dat_o),      // cursor1 color registers data
-		.vbsint_in(vmem_swint),     // video memory bank switch interrupt
-		.cbsint_in(clut_swint),     // clut memory bank switch interrupt
-		.hint_in(hint),             // horizontal interrupt
-		.vint_in(vint),             // vertical interrupt
-		.luint_in(luint),           // line fifo underrun interrupt
-		.sint_in(sint),             // system-error interrupt
-		.Thsync(Thsync),
-		.Thgdel(Thgdel),
-		.Thgate(Thgate),
-		.Thlen(Thlen),
-		.Tvsync(Tvsync),
-		.Tvgdel(Tvgdel),
-		.Tvgate(Tvgate),
-		.Tvlen(Tvlen),
-		.VBARa(VBARa),
-		.VBARb(VBARb),
-		.clut_acc(ext_clut_req),
-		.clut_ack(ext_clut_ack),
-		.clut_q(ext_clut_q)
+		.wbm_busy    ( wbm_busy     ), // Data transfer in progress
+		.dvi_odf     ( ctrl_dvi_odf ), // DVI output data format
+		.bl          ( ctrl_bl      ), // blank polarization level
+		.csl         ( ctrl_csl     ), // csync polarization level
+		.vsl         ( ctrl_vsl     ), // vsync polarization level
+		.hsl         ( ctrl_hsl     ), // hsync polarization level
+		.pc          ( ctrl_pc      ), // pseudo-color mode (only for 8bpp)
+		.cd          ( ctrl_cd      ), // color depth
+		.vbl         ( ctrl_vbl     ), // video memory burst length
+		.cbsw        ( ctrl_cbsw    ), // color lookup table bank switch enable
+		.vbsw        ( ctrl_vbsw    ), // video bank switch enable
+		.ven         ( ctrl_ven     ), // video enable
+		.acmp        ( stat_acmp    ), // active color lookup table page
+		.avmp        ( stat_avmp    ), // active video memory page
+		.cursor0_res ( cursor0_res  ), // cursor0 resolution
+		.cursor0_en  ( cursor0_en   ), // cursor0 enable
+		.cursor0_xy  ( cursor0_xy   ), // cursor0 (x,y)
+		.cursor0_ba  ( cursor0_ba   ), // curso0 video memory base address
+		.cursor0_ld  ( cursor0_ld   ), // reload curso0 from video memory
+ 		.cc0_adr_i   ( cc0_adr_i    ), // cursor0 color registers address
+		.cc0_dat_o   ( cc0_dat_o    ), // cursor0 color registers data
+		.cursor1_res ( cursor1_res  ), // cursor1 resolution
+		.cursor1_en  ( cursor1_en   ), // cursor1 enable
+		.cursor1_xy  ( cursor1_xy   ), // cursor1 (x,y)
+		.cursor1_ba  ( cursor1_ba   ), // cursor1 video memory base address
+		.cursor1_ld  ( cursor1_ld   ), // reload cursor1 from video memory
+ 		.cc1_adr_i   ( cc1_adr_i    ), // cursor1 color registers address
+		.cc1_dat_o   ( cc1_dat_o    ), // cursor1 color registers data
+		.vbsint_in   ( vmem_swint   ), // video memory bank switch interrupt
+		.cbsint_in   ( clut_swint   ), // clut memory bank switch interrupt
+		.hint_in     ( hint         ), // horizontal interrupt
+		.vint_in     ( vint         ), // vertical interrupt
+		.luint_in    ( luint        ), // line fifo underrun interrupt
+		.sint_in     ( sint         ), // system-error interrupt
+		.Thsync      ( Thsync       ),
+		.Thgdel      ( Thgdel       ),
+		.Thgate      ( Thgate       ),
+		.Thlen       ( Thlen        ),
+		.Tvsync      ( Tvsync       ),
+		.Tvgdel      ( Tvgdel       ),
+		.Tvgate      ( Tvgate       ),
+		.Tvlen       ( Tvlen        ),
+		.VBARa       ( VBARa        ),
+		.VBARb       ( VBARb        ),
+		.clut_acc    ( ext_clut_req ),
+		.clut_ack    ( ext_clut_ack ),
+		.clut_q      ( ext_clut_q   )
 	);
 
 	// hookup wishbone master
 	vga_wb_master wbm (
 		// wishbone interface
-		.clk_i(wb_clk_i),
-		.rst_i(wb_rst_i),
-		.nrst_i(arst),
-		.cyc_o(wbm_cyc_o),
-		.stb_o(wbm_stb_o),
-		.cti_o(wbm_cti_o),
-		.bte_o(wbm_bte_o),
-		.we_o(wbm_we_o),
-		.adr_o(wbm_adr_o),
-		.sel_o(wbm_sel_o),
-		.ack_i(wbm_ack_i),
-		.err_i(wbm_err_i),
-		.dat_i(wbm_dat_i),
+		.clk_i  ( wb_clk_i  ),
+		.rst_i  ( wb_rst_i  ),
+		.nrst_i ( arst      ),
+		.cyc_o  ( wbm_cyc_o ),
+		.stb_o  ( wbm_stb_o ),
+		.cti_o  ( wbm_cti_o ),
+		.bte_o  ( wbm_bte_o ),
+		.we_o   ( wbm_we_o  ),
+		.adr_o  ( wbm_adr_o ),
+		.sel_o  ( wbm_sel_o ),
+		.ack_i  ( wbm_ack_i ),
+		.err_i  ( wbm_err_i ),
+		.dat_i  ( wbm_dat_i ),
 
 		// internal connections
-		.sint(sint),
-		.ctrl_ven(ctrl_ven),
-		.ctrl_cd(ctrl_cd),
-		.ctrl_pc(ctrl_pc),
-		.ctrl_vbl(ctrl_vbl),
-		.ctrl_cbsw(ctrl_cbsw),
-		.ctrl_vbsw(ctrl_vbsw),
-		.cursor0_en(cursor0_en),    // cursor0 enable
-		.cursor0_res(cursor0_res),  // cursor0 resolution
-		.cursor0_xy(cursor0_xy),    // cursor0 (x,y)
-		.cursor0_ba(cursor0_ba),    // curso0 video memory base address
-		.cursor0_ld(cursor0_ld),    // reload curso0 from video memory
- 		.cc0_adr_o(cc0_adr_i),      // cursor0 color registers address
-		.cc0_dat_i(cc0_dat_o),      // cursor0 color registers data
-		.cursor1_en(cursor1_en),    // cursor1 enable
-		.cursor1_res(cursor1_res),  // cursor1 resolution
-		.cursor1_xy(cursor1_xy),    // cursor1 (x,y)
-		.cursor1_ba(cursor1_ba),    // cursor1 video memory base address
-		.cursor1_ld(cursor1_ld),    // reload cursor1 from video memory
- 		.cc1_adr_o(cc1_adr_i),      // cursor1 color registers address
-		.cc1_dat_i(cc1_dat_o),      // cursor1 color registers data
-		.VBAa(VBARa),
-		.VBAb(VBARb),
-		.Thgate(Thgate),
-		.Tvgate(Tvgate),
-		.stat_acmp(stat_acmp),
-		.stat_avmp(stat_avmp),
-		.vmem_switch(vmem_swint),
-		.clut_switch(clut_swint),
+		.sint        (sint         ),
+		.ctrl_ven    (ctrl_ven     ),
+		.ctrl_cd     (ctrl_cd      ),
+		.ctrl_vbl    (ctrl_vbl     ),
+		.ctrl_vbsw   (ctrl_vbsw    ),
+		.busy        (wbm_busy     ),
+		.VBAa        (VBARa        ),
+		.VBAb        (VBARb        ),
+		.Thgate      (Thgate       ),
+		.Tvgate      (Tvgate       ),
+		.stat_avmp   (stat_avmp    ),
+		.vmem_switch (vmem_swint   ),
+		.ImDoneFifoQ ( ImDoneFifoQ ),
 
-		// line fifo memory signals
-		.line_fifo_wreq(line_fifo_dpm_wreq),
-		.line_fifo_d(line_fifo_dpm_d),
-		.line_fifo_full(line_fifo_full_wr),
+		.cursor_adr  ( cursor_adr  ),
+		.cursor0_ba  ( cursor0_ba  ),    // curso0 video memory base address
+		.cursor0_ld  ( cursor0_ld  ),    // reload curso0 from video memory
+		.cursor1_ba  ( cursor1_ba  ),    // cursor1 video memory base address
+		.cursor1_ld  ( cursor1_ld  ),    // reload cursor1 from video memory
 
-		// clut memory signals
-		.clut_req(cp_clut_req),
-		.clut_ack(cp_clut_ack),
-		.clut_adr(cp_clut_adr),
-		.clut_q(cp_clut_q)
+		.fb_data_fifo_rreq  ( fb_data_fifo_rreq  ),
+		.fb_data_fifo_q     ( fb_data_fifo_q     ),
+		.fb_data_fifo_empty ( fb_data_fifo_empty )
 	);
 
 	// hookup CLUT <cycle shared memory>
@@ -309,77 +318,104 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 
 	// hookup pixel and video timing generator
 	vga_pgen pixel_generator (
-		.mclk(wb_clk_i),
-		.pclk(clk_p_i),
-		.ctrl_ven(ctrl_ven),
-		.ctrl_HSyncL(ctrl_hsl),
-		.Thsync(Thsync),
-		.Thgdel(Thgdel),
-		.Thgate(Thgate),
-		.Thlen(Thlen),
-		.ctrl_VSyncL(ctrl_vsl),
-		.Tvsync(Tvsync),
-		.Tvgdel(Tvgdel),
-		.Tvgate(Tvgate),
-		.Tvlen(Tvlen),
-		.ctrl_CSyncL(ctrl_csl),
-		.ctrl_BlankL(ctrl_bl),
-		.eoh(hint),
-		.eov(vint),
-		.gate(cgate),
-		.Hsync(ihsync),
-		.Vsync(ivsync),
-		.Csync(icsync),
-		.Blank(iblank)
+		.clk_i              ( wb_clk_i           ),
+		.ctrl_ven           ( ctrl_ven           ),
+		.ctrl_HSyncL        ( ctrl_hsl           ),
+		.Thsync             ( Thsync             ),
+		.Thgdel             ( Thgdel             ),
+		.Thgate             ( Thgate             ),
+		.Thlen              ( Thlen              ),
+		.ctrl_VSyncL        ( ctrl_vsl           ),
+		.Tvsync             ( Tvsync             ),
+		.Tvgdel             ( Tvgdel             ),
+		.Tvgate             ( Tvgate             ),
+		.Tvlen              ( Tvlen              ),
+		.ctrl_CSyncL        ( ctrl_csl           ),
+		.ctrl_BlankL        ( ctrl_bl            ),
+		.eoh                ( hint               ),
+		.eov                ( vint               ),
+
+		// frame buffer data (from wbm)
+		.fb_data_fifo_rreq  ( fb_data_fifo_rreq  ),
+		.fb_data_fifo_q     ( fb_data_fifo_q     ),
+		.fb_data_fifo_empty ( fb_data_fifo_empty ),
+		.ImDoneFifoQ        ( ImDoneFifoQ        ),
+
+		// clut memory signals
+		.stat_acmp          ( stat_acmp          ),
+		.clut_req           ( cp_clut_req        ),
+		.clut_ack           ( cp_clut_ack        ),
+		.clut_adr           ( cp_clut_adr        ),
+		.clut_q             ( cp_clut_q          ),
+		.ctrl_cbsw          ( ctrl_cbsw          ),
+		.clut_switch        ( clut_swint         ),
+
+		.cursor_adr         ( cursor_adr         ),  // cursor data address (from wbm)
+		.cursor0_en         ( cursor0_en         ),  // cursor0 enable
+		.cursor0_res        ( cursor0_res        ),  // cursor0 resolution
+		.cursor0_xy         ( cursor0_xy         ),  // cursor0 (x,y)
+		.cc0_adr_o          ( cc0_adr_i          ),  // cursor0 color registers address
+		.cc0_dat_i          ( cc0_dat_o          ),  // cursor0 color registers data
+		.cursor1_en         ( cursor1_en         ),  // cursor1 enable
+		.cursor1_res        ( cursor1_res        ),  // cursor1 resolution
+		.cursor1_xy         ( cursor1_xy         ),  // cursor1 (x,y)
+		.cc1_adr_o          ( cc1_adr_i          ),  // cursor1 color registers address
+		.cc1_dat_i          ( cc1_dat_o          ),  // cursor1 color registers data
+
+		.ctrl_dvi_odf       ( ctrl_dvi_odf       ),
+		.ctrl_cd            ( ctrl_cd            ),
+		.ctrl_pc            ( ctrl_pc            ),
+
+		// line fifo memory signals
+		.line_fifo_wreq     ( line_fifo_wreq     ),
+		.line_fifo_d        ( line_fifo_d        ),
+		.line_fifo_full     ( line_fifo_full_wr  ),
+		.line_fifo_rreq     ( line_fifo_rreq     ),
+		.line_fifo_q        ( line_fifo_q        ),
+
+		.pclk_i             ( clk_p_i            ),
+	`ifdef VGA_12BIT_DVI
+		.dvi_pclk_p_o       ( dvi_pclk_p_o       ),
+		.dvi_pclk_m_o       ( dvi_pclk_m_o       ),
+		.dvi_hsync_o        ( dvi_hsync_o        ),
+		.dvi_vsync_o        ( dvi_vsync_o        ),
+		.dvi_de_o           ( dvi_de_o           ),
+		.dvi_d_o            ( dvi_d_o            ),
+	`endif
+		.pclk_o             ( clk_p_o            ),
+		.hsync_o            ( hsync_pad_o        ),
+		.vsync_o            ( vsync_pad_o        ),
+		.csync_o            ( csync_pad_o        ),
+		.blank_o            ( blank_pad_o        ),
+		.r_o                ( r_pad_o            ),
+		.g_o                ( g_pad_o            ),
+		.b_o                ( b_pad_o            )
+
 	);
-
-
-	// delay video control signals 1 clock cycle (dual clock fifo synchronizes output)
-	always @(posedge clk_p_i)
-	begin
-	    hsync_pad_o <= #1 ihsync;
-	    vsync_pad_o <= #1 ivsync;
-	    csync_pad_o <= #1 icsync;
-	    blank_pad_o <= #1 iblank;
-	end
 
 	// hookup line-fifo
 	vga_fifo_dc #(LINE_FIFO_AWIDTH, 24) line_fifo (
-		.rclk(clk_p_i),
-		.wclk(wb_clk_i),
-		.aclr(ctrl_ven),
-		.wreq(line_fifo_dpm_wreq),
-		.d(line_fifo_dpm_d),
-		.rreq(cgate),
-		.q(line_fifo_dpm_q),
-		.rd_empty(line_fifo_empty_rd),
-		.rd_full(),
-		.wr_empty(),
-		.wr_full(line_fifo_full_wr)
+		.rclk     ( clk_p_i            ),
+		.wclk     ( wb_clk_i           ),
+		.aclr     ( ctrl_ven           ),
+		.wreq     ( line_fifo_wreq     ),
+		.d        ( line_fifo_d        ),
+		.rreq     ( line_fifo_rreq     ),
+		.q        ( line_fifo_q        ),
+		.rd_empty ( line_fifo_empty_rd ),
+		.rd_full  ( ),
+		.wr_empty ( ),
+		.wr_full  ( line_fifo_full_wr  )
 	);
-
-	assign r_pad_o = line_fifo_dpm_q[23:16];
-	assign g_pad_o = line_fifo_dpm_q[15: 8];
-	assign b_pad_o = line_fifo_dpm_q[ 7: 0];
 
 	// generate interrupt signal when reading line-fifo while it is empty (line-fifo under-run interrupt)
 	reg luint_pclk, sluint;
 
 	always @(posedge clk_p_i)
-	  luint_pclk <= #1 cgate & line_fifo_empty_rd;
+	  luint_pclk <= #1 line_fifo_rreq & line_fifo_empty_rd;
 
 	always @(posedge wb_clk_i or negedge arst)
-	  if (!arst)
-	    begin
-	        sluint <= #1 1'b0;
-	        luint  <= #1 1'b0;
-	    end
-	  else if (wb_rst_i)
-	    begin
-	        sluint <= #1 1'b0;
-	        luint  <= #1 1'b0;
-	    end
-	  else if (!ctrl_ven)
+	  if (!ctrl_ven)
 	    begin
 	        sluint <= #1 1'b0;
 	        luint  <= #1 1'b0;
