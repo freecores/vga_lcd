@@ -73,13 +73,13 @@ force -freeze /vga/we_i 1 178ns, 0 183ns
 force -freeze /vga/adr_i 110 178ns, ZZZ 183ns
 force -freeze /vga/sdat_i 16#15000000 178ns, 16#ZZZZZZZZ 183ns
 
--- control register, bl-pos, cl-pos, vs-pos, hs-pos, 8bit pc, 8bpp, vbl-1cycle, bs-en, bsi-en, hi-en, vi-en, v-en
+-- control register, bl-pos, cl-pos, vs-pos, hs-pos, 8bit pc, 8bpp, vbl-4cycle, bs-en, bsi-en, hi-en, vi-en, v-en
 force -freeze /vga/cyc_i 1 188ns, 0 193ns
 force -freeze /vga/sel_i 1111 188ns, 0000 193ns
 force -freeze /vga/stb_i 1 188ns, 0 193ns
 force -freeze /vga/we_i 1 188ns, 0 193ns
 force -freeze /vga/adr_i 000 188ns, ZZZ 193ns
-force -freeze /vga/sdat_i 16#0000081f 188ns, 16#ZZZZZZZZ 193ns
+force -freeze /vga/sdat_i 16#0000090f 188ns, 16#ZZZZZZZZ 193ns
 
 -- present video memory data to vga controller
 force -freeze /vga/mdat_i 16#01234567 208ns, 16#89abcdef 213ns, 16#76543210 218ns, 16#fedcba98 223ns
@@ -90,14 +90,14 @@ force -freeze /vga/err_i 0 0ns
 
 -- present color lookup table data to vga controller
 force -freeze /vga/mdat_i 16#00112233 265ns, 16#00445566 270ns, 16#00778899 275ns, 16#00aabbcc 280ns
-force -freeze /vga/ack_i 1 265ns, 0 285ns
+force -freeze /vga/ack_i 1 265ns, 0 275ns
 
 force -freeze /vga/mdat_i 16#00ddeeff 310ns, 16#00332211 315ns, 16#00665544 320ns, 16#00998877 325ns
 force -freeze /vga/ack_i 1 310ns, 0 330ns
 
 
 -- keep ACK_I signal asserted (acknowledge all cycles)
-force -freeze /vga/ack_i 1 350ns
+force -freeze /vga/ack_i 1 355ns
 
 -- INTA_O is asserted (horizontal interrupt), clear it
 force -freeze /vga/cyc_i 1 1408ns, 0 1413ns
@@ -106,6 +106,8 @@ force -freeze /vga/stb_i 1 1408ns, 0 1413ns
 force -freeze /vga/we_i 1 1408ns, 0 1413ns
 force -freeze /vga/adr_i 001 1408ns, ZZZ 1413ns
 force -freeze /vga/sdat_i 16#00000020 1408ns, 16#ZZZZZZZZ 1413ns
+
+
 
 
 

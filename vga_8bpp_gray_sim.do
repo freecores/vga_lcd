@@ -90,14 +90,10 @@ force -freeze /vga/err_i 0 0ns
 
 -- present color lookup table data to vga controller
 force -freeze /vga/mdat_i 16#00112233 265ns, 16#00445566 270ns, 16#00778899 275ns, 16#00aabbcc 280ns
-force -freeze /vga/ack_i 1 265ns, 0 285ns
-
-force -freeze /vga/mdat_i 16#00ddeeff 310ns, 16#00332211 315ns, 16#00665544 320ns, 16#00998877 325ns
-force -freeze /vga/ack_i 1 310ns, 0 330ns
-
+force -freeze /vga/ack_i 1 265ns, 0 275ns
 
 -- keep ACK_I signal asserted (acknowledge all cycles)
-force -freeze /vga/ack_i 1 350ns
+force -freeze /vga/ack_i 1 390ns
 
 -- INTA_O is asserted (horizontal interrupt), clear it
 force -freeze /vga/cyc_i 1 1408ns, 0 1413ns
@@ -106,6 +102,8 @@ force -freeze /vga/stb_i 1 1408ns, 0 1413ns
 force -freeze /vga/we_i 1 1408ns, 0 1413ns
 force -freeze /vga/adr_i 001 1408ns, ZZZ 1413ns
 force -freeze /vga/sdat_i 16#00000020 1408ns, 16#ZZZZZZZZ 1413ns
+
+
 
 
 

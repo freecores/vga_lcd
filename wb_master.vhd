@@ -142,7 +142,8 @@ begin
 					vmem_acc <= '0';
 					clut_acc <= '0';
 				else
-					clut_acc <= clut_req and (nvmem_req or clut_acc);
+--					clut_acc <= clut_req and (nvmem_req or clut_acc);
+					clut_acc <= clut_req and ( (nvmem_req and not vmem_acc) or clut_acc);
 					vmem_acc <= (not nvmem_req or (vmem_acc and not burst_done)) and not clut_acc;
 				end if;
 
@@ -150,7 +151,8 @@ begin
 				dvmem_acc <= bvmem_acc;
 			end if;
 		end process access_ctrl;
-		bvmem_acc <= vmem_acc and (not burst_done or not nvmem_req);
+--		bvmem_acc <= vmem_acc and (not burst_done or not nvmem_req);
+		bvmem_acc <= vmem_acc and not (burst_done and vmem_ack and nvmem_req);
 
 		vmem_ack <= ACK_I and dvmem_acc;
 		clut_ack <= ACK_I and dclut_acc;
@@ -322,3 +324,6 @@ begin
 	line_fifo_wreq <= RGBbuf_rreq;
 
 end architecture structural;
+
+
+

@@ -93,11 +93,11 @@ force -freeze /vga/mdat_i 16#00112233 265ns, 16#00445566 270ns, 16#00778899 275n
 force -freeze /vga/ack_i 1 265ns, 0 285ns
 
 force -freeze /vga/mdat_i 16#00ddeeff 310ns, 16#00332211 315ns, 16#00665544 320ns, 16#00998877 325ns
-force -freeze /vga/ack_i 1 310ns, 0 330ns
+force -freeze /vga/ack_i 1 310ns, 0 320ns
 
 
 -- keep ACK_I signal asserted (acknowledge all cycles)
-force -freeze /vga/ack_i 1 350ns
+force -freeze /vga/ack_i 1 365ns
 
 -- INTA_O is asserted (bank switch), clear it
 force -freeze /vga/cyc_i 1 928ns, 0 933ns
@@ -114,6 +114,8 @@ force -freeze /vga/stb_i 1 1408ns, 0 1413ns
 force -freeze /vga/we_i 1 1408ns, 0 1413ns
 force -freeze /vga/adr_i 001 1408ns, ZZZ 1413ns
 force -freeze /vga/sdat_i 16#00000020 1408ns, 16#ZZZZZZZZ 1413ns
+
+
 
 
 
