@@ -9,17 +9,18 @@ SHELL = /bin/sh
 #
 ##########################################################################
 DUT_SRC_DIR=../../../rtl/verilog
-_TARGETS_=	$(DUT_SRC_DIR)/ro_cnt.v			\
-		$(DUT_SRC_DIR)/ud_cnt.v			\
-		$(DUT_SRC_DIR)/vga_vga_and_clut.v	\
-		$(DUT_SRC_DIR)/vga_top.v		\
-		$(DUT_SRC_DIR)/vga_csm_pb.v		\
-		$(DUT_SRC_DIR)/vga_fifo_dc.v		\
-		$(DUT_SRC_DIR)/vga_fifo.v		\
-		$(DUT_SRC_DIR)/vga_vtim.v		\
-		$(DUT_SRC_DIR)/vga_pgen.v		\
+_TARGETS_=	$(DUT_SRC_DIR)/generic_dpram.v		\
+		$(DUT_SRC_DIR)/generic_spram.v		\
 		$(DUT_SRC_DIR)/vga_colproc.v		\
+		$(DUT_SRC_DIR)/vga_csm_pb.v		\
+		$(DUT_SRC_DIR)/vga_cur_cregs.v		\
+		$(DUT_SRC_DIR)/vga_curproc.v		\
+		$(DUT_SRC_DIR)/vga_enh_top.v 		\
+		$(DUT_SRC_DIR)/vga_fifo.v		\
+		$(DUT_SRC_DIR)/vga_fifo_dc.v		\
+		$(DUT_SRC_DIR)/vga_pgen.v		\
 		$(DUT_SRC_DIR)/vga_tgen.v		\
+		$(DUT_SRC_DIR)/vga_vtim.v		\
 		$(DUT_SRC_DIR)/vga_wb_master.v		\
 		$(DUT_SRC_DIR)/vga_wb_slave.v
 
@@ -30,12 +31,12 @@ _TARGETS_=	$(DUT_SRC_DIR)/ro_cnt.v			\
 #
 ##########################################################################
 TB_SRC_DIR=../../../bench/verilog
-_TB_="		$(TB_SRC_DIR)/test_bench_top.v		\
+_TB_=		$(TB_SRC_DIR)/test_bench_top.v		\
 		$(TB_SRC_DIR)/wb_slv_model.v		\
 		$(TB_SRC_DIR)/wb_mast_model.v		\
 		$(TB_SRC_DIR)/sync_check.v		\
-		$(DUT_SRC_DIR)/vga_dpm.v		\
-		"
+		$(TB_SRC_DIR)/wb_b3_check.v
+
 
 ##########################################################################
 #
@@ -66,10 +67,10 @@ sim:
 	@echo "----- Running NCVLOG ... ----------"
 	@$(MAKE) $(MS) vlog				\
 		TARGETS="$(_TARGETS_)"			\
-		TB=$(_TB_)				\
+		TB="$(_TB_)"				\
 		INCDIR=$(INCDIR)			\
 		WAVES="$(WAVES)"			\
-		TOP=test
+		TOP=$(_TOP_)
 	@echo ""
 	@echo "----- Running NCELAB ... ----------"
 	@$(MAKE) $(MS) elab				\
@@ -77,7 +78,7 @@ sim:
 	@echo ""
 	@echo "----- Running NCSIM ... ----------"
 	@$(MAKE) $(MS) ncsim				\
-		TOP=test
+		TOP=$(_TOP_)
 	@echo ""
 
 
@@ -89,7 +90,7 @@ gate:
 	@echo "----- Running NCVLOG ... ----------"
 	$(MAKE)$(MS) vlog				\
 		TARGETS="$(UMC_LIB) $(GATE_NETLIST)"	\
-		TB=$(_TB_)				\
+		TB="$(_TB_)"				\
 		INCDIR=$(INCDIR)			\
 		WAVES="$(WAVES)"
 	@echo ""
@@ -107,7 +108,7 @@ hal:
 	@echo "----- Running HAL ... ----------"
 	hal	+incdir+$(DUT_SRC_DIR)                          \
 		-NOP -NOS -nocheck STYVAL:USEPRT:NOBLKN:DLNBLK  \
-		$(_TARGETS_)
+		"$(_TARGETS_)"
 	@echo "----- DONE ... ----------"
 
 clean:
@@ -120,12 +121,6 @@ clean:
 # NCVLOG
 #
 ##########################################################################
-
-vhdl:
-	ncvhdl $(NCCOMMON) $(LOGF) -APPEND_LOG			\
-		-WORK count -V93 $(DUT_SRC_DIR)/counter.vhd
-	ncvhdl $(NCCOMMON) $(LOGF) -APPEND_LOG			\
-		-WORK work -V93 $(TARGETS)
 
 vlog:
 	ncvlog $(NCCOMMON) $(LOGF) 				\
@@ -151,5 +146,6 @@ elab:
 ncsim:
 	ncsim	$(NCCOMMON) $(LOGF) -APPEND_LOG			\
 		-EXIT -ERRORMAX 10 work.$(TOP)
+
 
 
