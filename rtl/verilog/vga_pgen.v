@@ -37,16 +37,21 @@
 
 //  CVS Log
 //
-//  $Id: vga_pgen.v,v 1.4 2002-01-28 03:47:16 rherveille Exp $
+//  $Id: vga_pgen.v,v 1.5 2002-04-05 06:24:35 rherveille Exp $
 //
-//  $Date: 2002-01-28 03:47:16 $
-//  $Revision: 1.4 $
+//  $Date: 2002-04-05 06:24:35 $
+//  $Revision: 1.5 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.4  2002/01/28 03:47:16  rherveille
+//               Changed counter-library.
+//               Changed vga-core.
+//               Added 32bpp mode.
+//
 
 `include "timescale.v"
 
@@ -119,15 +124,28 @@ module vga_pgen (mclk, pclk, ctrl_ven, ctrl_HSyncL, Thsync, Thgdel, Thgate, Thle
 	reg dseol, dseof; // delayed seol, seof
 
 	always@(posedge mclk)
-		begin
-			seol  <= eol;
-			dseol <= seol;
+		if (!ctrl_ven)
+			begin
+				seol  <= #1 1'b0;
+				dseol <= #1 1'b0;
 
-			seof  <= eof;
-			dseof <= seof;
+				seof  <= #1 1'b0;
+				dseof <= #1 1'b0;
 
-			eoh <= seol & !dseol;
-			eov <= seof & !dseof;
-		end
+				eoh   <= #1 1'b0;
+				eov   <= #1 1'b0;
+			end
+		else
+			begin
+				seol  <= #1 eol;
+				dseol <= #1 seol;
+
+				seof  <= #1 eof;
+				dseof <= #1 seof;
+
+				eoh   <= #1 seol & !dseol;
+				eov   <= #1 seof & !dseof;
+			end
 
 endmodule
+
