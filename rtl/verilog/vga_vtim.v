@@ -37,16 +37,21 @@
 
 //  CVS Log
 //
-//  $Id: vga_vtim.v,v 1.6 2002-04-20 10:02:39 rherveille Exp $
+//  $Id: vga_vtim.v,v 1.7 2003-03-19 12:50:45 rherveille Exp $
 //
-//  $Date: 2002-04-20 10:02:39 $
-//  $Revision: 1.6 $
+//  $Date: 2003-03-19 12:50:45 $
+//  $Revision: 1.7 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.6  2002/04/20 10:02:39  rherveille
+//               Changed video timing generator.
+//               Changed wishbone master vertical gate count code.
+//               Fixed a potential bug in the wishbone slave (cursor color register readout).
+//
 //               Revision 1.5  2002/01/28 03:47:16  rherveille
 //               Changed counter-library.
 //               Changed vga-core.
@@ -71,7 +76,7 @@ module vga_vtim(clk, ena, rst, Tsync, Tgdel, Tgate, Tlen, Sync, Gate, Done);
 	output Done; // done with line/frame
 	reg Sync;
 	reg Gate;
-
+	reg Done;
 
 	//
 	// variable declarations
@@ -84,83 +89,88 @@ module vga_vtim(clk, ena, rst, Tsync, Tgdel, Tgate, Tlen, Sync, Gate, Done);
 	// module body
 	//
 
-	// generate go signal
-	always@(posedge clk)
-		if (rst)
-			begin
-				go   <= #1 1'b0;
-				drst <= #1 1'b1;
-			end
-		else // if (ena)
-			begin
-				go   <= #1 Dlen | (!rst & drst);
-				drst <= #1 rst;
-			end
+	// generate timing statemachine
+	reg  [15:0] cnt, cnt_len;
+	wire [16:0] cnt_nxt, cnt_len_nxt;
+	wire        cnt_done, cnt_len_done;
 
-	// hookup sync counter
-	ro_cnt #(8, 1'b0, 8)
-		sync_cnt(
-			.clk(clk),
-			.rst(rst),
-			.nReset(1'b1),
-			.cnt_en(ena),
-			.go(go),
-			.d(Tsync),
-			.q(),
-			.done(Dsync)
-		);
+	assign cnt_nxt = {1'b0, cnt} -17'h1;
+	assign cnt_done = cnt_nxt[16];
 
-	// hookup gate delay counter
-	ro_cnt #(8, 1'b0, 8)
-		gdel_cnt(
-			.clk(clk),
-			.rst(rst),
-			.nReset(1'b1),
-			.cnt_en(ena),
-			.go(Dsync),
-			.d(Tgdel),
-			.q(),
-			.done(Dgdel)
-		);
+	assign cnt_len_nxt = {1'b0, cnt_len} -17'h1;
+	assign cnt_len_done = cnt_len_nxt[16];
 
-	// hookup gate counter
-	ro_cnt #(16, 1'b0, 16)
-		gate_cnt(
-			.clk(clk),
-			.rst(rst),
-			.nReset(1'b1),
-			.cnt_en(ena),
-			.go(Dgdel),
-			.d(Tgate),
-			.q(),
-			.done(Dgate)
-		);
+	reg [4:0] state;
+	parameter [4:0] idle_state = 5'b00001;
+	parameter [4:0] sync_state = 5'b00010;
+	parameter [4:0] gdel_state = 5'b00100;
+	parameter [4:0] gate_state = 5'b01000;
+	parameter [4:0] len_state  = 5'b10000;
 
-	// hookup length counter
-	ro_cnt #(16, 1'b0, 16)
-		len_cnt(
-			.clk(clk),
-			.rst(rst),
-			.nReset(1'b1),
-			.cnt_en(ena),
-			.go(go),
-			.d(Tlen),
-			.q(),
-			.done(Dlen)
-		);
+	always @(posedge clk)
+	  if (rst)
+	    begin
+	        state   <= #1 idle_state;
+	        cnt     <= #1 16'h0;
+	        cnt_len <= #1 16'b0;
+	        Sync    <= #1 1'b0;
+	        Gate    <= #1 1'b0;
+	        Done    <= #1 1'b0;
+	    end
+	  else if (ena)
+	    begin
+	        cnt     <= #1 cnt_nxt[15:0];
+	        cnt_len <= #1 cnt_len_nxt[15:0];
 
-	// generate output signals
-	always@(posedge clk)
-		if (rst)
-			Sync <= #1 1'b0;
-		else
-			Sync <= #1 (go | Sync) & !Dsync;
+	        Done    <= #1 1'b0;
 
-	always@(posedge clk)
-		if (rst)
-			Gate <= #1 1'b0;
-		else
-			Gate <= #1 (Dgdel | Gate) & !Dgate;
+	        case (state)
+	          idle_state:
+	            begin
+	                state   <= #1 sync_state;
+	                cnt     <= #1 Tsync;
+	                cnt_len <= #1 Tlen;
 
-	assign Done = Dlen;
+	                Sync    <= #1 1'b1;
+	            end
+
+	          sync_state:
+	            if (cnt_done)
+	              begin
+	                  state <= #1 gdel_state;
+	                  cnt   <= #1 Tgdel;
+
+	                  Sync  <= #1 1'b0;
+	              end
+
+	          gdel_state:
+	            if (cnt_done)
+	              begin
+	                  state <= #1 gate_state;
+	                  cnt   <= #1 Tgate;
+
+	                  Gate  <= #1 1'b1;
+	              end
+
+	          gate_state:
+	            if (cnt_done)
+	              begin
+	                  state <= #1 len_state;
+
+	                  Gate  <= #1 1'b0;
+	              end
+
+	          len_state:
+	            if (cnt_len_done)
+	              begin
+	                  state   <= #1 sync_state;
+	                  cnt     <= #1 Tsync;
+	                  cnt_len <= #1 Tlen;
+
+	                  Sync    <= #1 1'b1;
+	                  Done    <= #1 1'b1;
+	              end
+
+	        endcase
+	    end
 endmodule

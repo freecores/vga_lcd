@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: vga_wb_master.v,v 1.12 2003-03-18 21:45:48 rherveille Exp $
+//  $Id: vga_wb_master.v,v 1.13 2003-03-19 12:50:45 rherveille Exp $
 //
-//  $Date: 2003-03-18 21:45:48 $
-//  $Revision: 1.12 $
+//  $Date: 2003-03-19 12:50:45 $
+//  $Revision: 1.13 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.12  2003/03/18 21:45:48  rherveille
+//               Added WISHBONE revB.3 Registered Feedback Cycles support
+//
 //               Revision 1.11  2002/04/20 10:02:39  rherveille
 //               Changed video timing generator.
 //               Changed wishbone master vertical gate count code.
@@ -358,13 +361,17 @@ module vga_wb_master (clk_i, rst_i, nrst_i,
 
 	// vgate counter
 	reg  [15:0] vgate_cnt;
-	wire vdone = ~|vgate_cnt[15:1] & vgate_cnt[0];
+	wire [16:0] vgate_cnt_val;
+	wire        vdone;
+
+	assign vgate_cnt_val = {1'b0, vgate_cnt} - 17'h1;
+	assign vdone = vgate_cnt_val[16];
 
 	always @(posedge clk_i)
 	  if (sclr || ImDoneStrb)
 	    vgate_cnt <= #1 Tvgate;
 	  else if (hdone)
-	    vgate_cnt <= #1 vgate_cnt -16'h1;
+	    vgate_cnt <= #1 vgate_cnt_val[15:0];
 
 	assign ImDone = hdone & vdone;
 
