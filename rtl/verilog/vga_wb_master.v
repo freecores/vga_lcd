@@ -37,16 +37,21 @@
 
 //  CVS Log
 //
-//  $Id: vga_wb_master.v,v 1.9 2002-03-04 16:05:52 rherveille Exp $
+//  $Id: vga_wb_master.v,v 1.10 2002-03-28 04:59:25 rherveille Exp $
 //
-//  $Date: 2002-03-04 16:05:52 $
-//  $Revision: 1.9 $
+//  $Date: 2002-03-28 04:59:25 $
+//  $Revision: 1.10 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.9  2002/03/04 16:05:52  rherveille
+//               Added hardware cursor support to wishbone master.
+//               Added provision to turn-off 3D cursors.
+//               Fixed some minor bugs.
+//
 //               Revision 1.8  2002/03/04 11:01:59  rherveille
 //               Added 64x64pixels 4bpp hardware cursor support.
 //
@@ -554,7 +559,7 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 	assign ssel1_wreq = color_proc_wreq;
 	assign ssel1_q    = color_proc_q;
 
-	assign cc1_adr_0  = 4'h0;
+	assign cc1_adr_o  = 4'h0;
 
 `ifdef VGA_HWC0	// generate additional signals for Hardware Cursor0 (if enabled)
 	wire sddImDoneFifoQ, sdImDoneFifoQ;
@@ -636,4 +641,5 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 	assign line_fifo_wreq = rgb_fifo_rreq;
 
 endmodule
+
 
