@@ -3,8 +3,12 @@
 -- Project: VGA
 -- Author : Richard Herveille
 -- rev.: 1.0 May 1st, 2001
--- rev.: 1.1 June 3rd, 2001. Changed address related sections.
+-- rev.: 1.1 June  3rd, 2001. Changed address related sections.
 -- rev.: 1.2 June 23nd, 2001. Removed unused "sel_vba", "vmem_offs" and "bl" signals.
+-- rev.: 1.3 July  6th, 2001. Major bug fixes; core did not respond correctly to delayed ACK_I generation.
+--
+
+-- ToDo: remove multiplier; replace it by simple counters.
 --
 
 library ieee;
@@ -107,7 +111,7 @@ architecture structural of wb_master is
 	end component colproc;
 
 	signal nVen : std_logic;                                                 -- NOT ctrl_Ven (video enable)
-	signal vmem_acc, dvmem_acc, bvmem_acc, clut_acc, dclut_acc : std_logic;  -- video memory access // delayed vmem_acc // video memory burst // clut access
+	signal vmem_acc, clut_acc : std_logic;                                   -- video memory access // clut access
 	signal clut_req, clut_ack : std_logic;                                   -- clut access request // clut access acknowledge
 	signal clut_offs : unsigned(7 downto 0);                                 -- clut memory offset
 	signal nvmem_req, vmem_ack : std_logic;                                  -- NOT video memory access request // video memory access acknowledge
@@ -139,22 +143,16 @@ begin
 					vmem_acc <= '0';
 					clut_acc <= '0';
 				else
---					clut_acc <= clut_req and (nvmem_req or clut_acc);
 					clut_acc <= clut_req and ( (nvmem_req and not vmem_acc) or clut_acc);
-					vmem_acc <= (not nvmem_req or (vmem_acc and not burst_done)) and not clut_acc;
+					vmem_acc <= (not nvmem_req or (vmem_acc and not (burst_done and vmem_ack) )) and not clut_acc;
 				end if;
-
-				dclut_acc <= clut_acc and clut_req;
-				dvmem_acc <= bvmem_acc;
 			end if;
 		end process access_ctrl;
---		bvmem_acc <= vmem_acc and (not burst_done or not nvmem_req);
-		bvmem_acc <= vmem_acc and not (burst_done and vmem_ack and nvmem_req);
 
-		vmem_ack <= ACK_I and dvmem_acc;
-		clut_ack <= ACK_I and dclut_acc;
+		vmem_ack <= ACK_I and vmem_acc;
+		clut_ack <= ACK_I and clut_acc;
 
-		SINT <= (dvmem_acc or clut_acc) and ERR_I; -- Non recoverable error, interrupt host system
+		SINT <= (vmem_acc or clut_acc) and ERR_I; -- Non recoverable error, interrupt host system
 
 		-- select active memory page
 		sel_AMP: process(CLK_I)
@@ -242,11 +240,11 @@ begin
 		end process addr;
 
 		-- generate wishbone signals
-		gen_wb_sigs: process(CLK_I, nRESET, vmemA, clutA, dvmem_acc)
+		gen_wb_sigs: process(CLK_I, nRESET, vmemA, clutA, vmem_acc)
 		begin
 
 			-- assign wishbone address
-			if (dvmem_acc = '1') then
+			if (vmem_acc = '1') then
 				ADR_O <= vmemA;
 			else
 				ADR_O <= clutA;
@@ -266,10 +264,10 @@ begin
 					CAB_O <= '0';
 					WE_O  <= '0';
 				else
-					CYC_O <= (clut_acc and clut_req) or bvmem_acc;
-					STB_O <= (clut_acc and clut_req) or bvmem_acc; -- and not (ACK_I or ERR_I);
+					CYC_O <= (clut_acc and clut_req and not ACK_I) or (vmem_acc and not (burst_done and vmem_ack and nvmem_req) );
+					STB_O <= (clut_acc and clut_req and not ACK_I) or (vmem_acc and not (burst_done and vmem_ack and nvmem_req) ); -- same as CYC_O; only 1 register+logic needed
 					SEL_O <= "1111"; -- only 32bit accesses are supported
-					CAB_O <= bvmem_acc;
+					CAB_O <= vmem_acc and not (burst_done and vmem_ack and nvmem_req);
 					WE_O  <= '0';    -- read only
 				end if;
 			end if;
@@ -321,3 +319,11 @@ begin
 	line_fifo_wreq <= RGBbuf_rreq;
 
 end architecture structural;
+
+
+
+
+
+
+
+

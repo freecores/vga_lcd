@@ -1,10 +1,10 @@
 --
 -- File colproc.vhd, Color Processor
 -- Project: VGA
--- Author : Richard Herveille, Sherif Taher Eid
--- rev.: 0.1 May  1st, 2001
+-- Author : Richard Herveille. Ideas and thoughts: Sherif Taher Eid
+-- rev.: 0.1 May   1st, 2001
 -- rev.: 0.2 June 23rd, 2001. Removed unused "prev_state" references from statemachine. Removed unused "dWB_Di" signal.
---
+-- rev.: 1.0 July  6th, 2001. Fixed a bug where the core did not repond correctly to a delayed clut_ack signal in 8bpp_pseudo_color mode.
 --
 
 library ieee;
@@ -202,8 +202,10 @@ begin
 					iG := WB_Di(15 downto  8);
 					iB := WB_Di( 7 downto  0);
 
-					if (colcnt > 1) then	-- account for pipeline delay
-						clut_acc := not RGB_fifo_full;
+					clut_acc := not RGB_fifo_full;
+
+					if ((colcnt = 0) and (clut_ack = '1')) then
+						clut_acc := '0';
 					end if;
 
 				--
@@ -312,6 +314,10 @@ begin
 	end process gen_colcnt;
 
 end architecture structural;
+
+
+
+
 
 
 
