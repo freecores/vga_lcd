@@ -37,16 +37,21 @@
 
 //  CVS Log
 //
-//  $Id: vga_defines.v,v 1.5 2003-05-07 09:48:54 rherveille Exp $
+//  $Id: vga_defines.v,v 1.6 2003-08-01 11:46:38 rherveille Exp $
 //
-//  $Date: 2003-05-07 09:48:54 $
-//  $Revision: 1.5 $
+//  $Date: 2003-08-01 11:46:38 $
+//  $Revision: 1.6 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.5  2003/05/07 09:48:54  rherveille
+//               Fixed some Wishbone RevB.3 related bugs.
+//               Changed layout of the core. Blocks are located more logically now.
+//               Started work on a dual clocked/double edge 12bit output. Commonly used by external devices like DVI transmitters.
+//
 //               Revision 1.4  2002/02/07 05:42:10  rherveille
 //               Fixed some bugs discovered by modified testbench
 //               Removed / Changed some strange logic constructions
@@ -69,7 +74,7 @@
 //
 // enable / disable 12bit DVI output
 // (for use with external DVI transmitters)
-`define VGA_12BIT_DVI
+//`define VGA_12BIT_DVI
 
 
 ////////////////////////

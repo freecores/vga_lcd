@@ -34,16 +34,21 @@
 
 //  CVS Log
 //
-//  $Id: vga_fifo.v,v 1.7 2003-05-07 09:48:54 rherveille Exp $
+//  $Id: vga_fifo.v,v 1.8 2003-08-01 11:46:38 rherveille Exp $
 //
-//  $Date: 2003-05-07 09:48:54 $
-//  $Revision: 1.7 $
+//  $Date: 2003-08-01 11:46:38 $
+//  $Revision: 1.8 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.7  2003/05/07 09:48:54  rherveille
+//               Fixed some Wishbone RevB.3 related bugs.
+//               Changed layout of the core. Blocks are located more logically now.
+//               Started work on a dual clocked/double edge 12bit output. Commonly used by external devices like DVI transmitters.
+//
 //               Revision 1.6  2002/02/07 05:42:10  rherveille
 //               Fixed some bugs discovered by modified testbench
 //               Removed / Changed some strange logic constructions
@@ -98,7 +103,7 @@ module vga_fifo (
 	input  [dw:1]     d;                       // data-input
 	output [dw:1]     q;                       // data-output
 
-	output [aw:1]     nword;                   // number of words in FIFO
+	output [aw:0]     nword;                   // number of words in FIFO
 
 	output            empty;                   // fifo empty
 	output            full;                    // fifo full
@@ -106,7 +111,7 @@ module vga_fifo (
 	output            aempty;                  // fifo asynchronous/almost empty (1 entry left)
 	output            afull;                   // fifo asynchronous/almost full (1 entry left)
 
-	reg [aw:1] nword;
+	reg [aw:0] nword;
 	reg        empty, full;
 
 	//
@@ -237,11 +242,11 @@ module vga_fifo (
 	// synopsys translate_off
 	always @(posedge clk)
 	  if (full & fwreq)
-	    $display("Writing while FIFO full\n");
+	    $display("Writing while FIFO full (%m)\n");
 
 	always @(posedge clk)
 	  if (empty & frreq)
-	    $display("Reading while FIFO empty\n");
+	    $display("Reading while FIFO empty (%m)\n");
 	// synopsys translate_on
 endmodule
 

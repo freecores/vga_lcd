@@ -37,16 +37,21 @@
 
 //  CVS Log
 //
-//  $Id: vga_fifo_dc.v,v 1.5 2003-05-07 09:48:54 rherveille Exp $
+//  $Id: vga_fifo_dc.v,v 1.6 2003-08-01 11:46:38 rherveille Exp $
 //
-//  $Date: 2003-05-07 09:48:54 $
-//  $Revision: 1.5 $
+//  $Date: 2003-08-01 11:46:38 $
+//  $Revision: 1.6 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.5  2003/05/07 09:48:54  rherveille
+//               Fixed some Wishbone RevB.3 related bugs.
+//               Changed layout of the core. Blocks are located more logically now.
+//               Started work on a dual clocked/double edge 12bit output. Commonly used by external devices like DVI transmitters.
+//
 //               Revision 1.4  2002/01/28 03:47:16  rherveille
 //               Changed counter-library.
 //               Changed vga-core.
@@ -57,7 +62,24 @@
 `include "timescale.v"
 //synopsys translate_on
 
-module vga_fifo_dc (rclk, wclk, aclr, wreq, d, rreq, q, rd_empty, rd_full, wr_empty, wr_full);
+
+/*
+
+  Dual clock FIFO.
+
+  Uses gray codes to move from one clock domain to the other.
+
+  Flags are synchronous to the related clock domain;
+  - empty: synchronous to read_clock
+  - full : synchronous to write_clock
+
+  CLR is available in both clock-domains.
+  Asserting any clr signal resets the entire FIFO.
+  When crossing clock domains the clears are synchronized.
+  Therefore one clock domain can enter or leave the reset state before the other.
+*/
+
+module vga_fifo_dc (rclk, wclk, rclr, wclr, wreq, d, rreq, q, empty, full);
 
 	// parameters
 	parameter AWIDTH = 7;  //128 entries
@@ -66,92 +88,126 @@ module vga_fifo_dc (rclk, wclk, aclr, wreq, d, rreq, q, rd_empty, rd_full, wr_em
 	// inputs & outputs
 	input rclk;             // read clock
 	input wclk;             // write clock
-	input aclr;             // active low asynchronous clear
+	input rclr;             // active high synchronous clear, synchronous to read clock
+	input wclr;             // active high synchronous clear, synchronous to write clock
 	input wreq;             // write request
 	input [DWIDTH -1:0] d;  // data input
 	input rreq;             // read request
 	output [DWIDTH -1:0] q; // data output
 
-	output rd_empty;        // FIFO is empty, synchronous to read clock
-	reg rd_empty;
-	output rd_full;         // FIFO is full, synchronous to read clock
-	reg rd_full;
-	output wr_empty;        // FIFO is empty, synchronous to write clock
-	reg wr_empty;
-	output wr_full;         // FIFO is full, synchronous to write clock
-	reg wr_full;
+	output empty;           // FIFO is empty, synchronous to read clock
+	reg empty;
+	output full;            // FIFO is full, synchronous to write clock
+	reg full;
 
 	// variable declarations
-	reg [AWIDTH -1:0] rptr, wptr;
-	wire ifull, iempty;
-	reg rempty, rfull, wempty, wfull;
+	reg rrst, wrst, srclr, ssrclr, swclr, sswclr;
+	reg [AWIDTH -1:0] rptr, wptr, rptr_gray, wptr_gray;
 
 	//
 	// module body
 	//
 
 
+	function [AWIDTH:1] bin2gray;
+		input [AWIDTH:1] bin;
+		integer n;
+	begin
+		for (n=1; n<AWIDTH; n=n+1)
+			bin2gray[n] = bin[n+1] ^ bin[n];
+
+		bin2gray[AWIDTH] = bin[AWIDTH];
+	end
+	endfunction
+
+	function [AWIDTH:1] gray2bin;
+		input [AWIDTH:1] gray;
+	begin
+		// same logic as bin2gray
+		gray2bin = bin2gray(gray);
+	end
+	endfunction
+
 	//
 	// Pointers
 	//
+
+	// generate synchronized resets
+	always @(posedge rclk)
+	begin
+	    swclr  <= #1 wclr;
+	    sswclr <= #1 swclr;
+	    rrst   <= #1 rclr | sswclr;
+	end
+
+	always @(posedge wclk)
+	begin
+	    srclr  <= #1 rclr;
+	    ssrclr <= #1 srclr;
+	    wrst   <= #1 wclr | ssrclr;
+	end
+
+
 	// read pointer
-	always@(posedge rclk or negedge aclr)
-		if (~aclr)
-			rptr <= #1 0;
-		else if (rreq)
-			rptr <= #1 rptr + 1;
+	always @(posedge rclk)
+	  if (rrst) begin
+	      rptr      <= #1 0;
+	      rptr_gray <= #1 0;
+	  end else if (rreq) begin
+	      rptr      <= #1 rptr +1'h1;
+	      rptr_gray <= #1 bin2gray(rptr +1'h1);
+	  end
 
 	// write pointer
-	always@(posedge wclk or negedge aclr)
-		if (~aclr)
-			wptr <= #1 0;
-		else if (wreq)
-			wptr <= #1 wptr +1;
+	always @(posedge wclk)
+	  if (wrst) begin
+	      wptr      <= #1 0;
+	      wptr_gray <= #1 0;
+	  end else if (wreq) begin
+	      wptr      <= #1 wptr +1'h1;
+	      wptr_gray <= #1 bin2gray(wptr +1'h1);
+	  end
 
 	//
 	// status flags
 	//
-	wire [AWIDTH -1:0] tmp;
-	wire [AWIDTH -1:0] tmp2;
-	assign tmp = wptr - rptr;
-	assign iempty = (rptr == wptr) ? 1'b1 : 1'b0;
+	reg [AWIDTH-1:0] srptr_gray, ssrptr_gray;
+	reg [AWIDTH-1:0] swptr_gray, sswptr_gray;
 
-	assign tmp2 = (1 << AWIDTH) -3;
-	assign ifull  = ( tmp >= tmp2 ) ? 1'b1 : 1'b0;
+	// from one clock domain, to the other
+	always @(posedge rclk)
+	begin
+	    swptr_gray  <= #1 wptr_gray;
+	    sswptr_gray <= #1 swptr_gray;
+	end
 
-	// rdclk flags
-	always@(posedge rclk or negedge aclr)
-		if (~aclr)
-			begin
-				rempty   <= #1 1'b1;
-				rfull    <= #1 1'b0;
-				rd_empty <= #1 1'b1;
-				rd_full  <= #1 1'b0;
-			end
-		else
-			begin
-				rempty   <= #1 iempty;
-				rfull    <= #1 ifull;
-				rd_empty <= #1 rempty;
-				rd_full  <= #1 rfull;
-			end
+	always @(posedge wclk)
+	begin
+	    srptr_gray  <= #1 rptr_gray;
+	    ssrptr_gray <= #1 srptr_gray;
+	end
 
-	// wrclk flags
-	always@(posedge wclk or negedge aclr)
-		if (~aclr)
-			begin
-				wempty   <= #1 1'b1;
-				wfull    <= #1 1'b0;
-				wr_empty <= #1 1'b1;
-				wr_full  <= #1 1'b0;
-			end
-		else
-			begin
-				wempty   <= #1 iempty;
-				wfull    <= #1 ifull;
-				wr_empty <= #1 wempty;
-				wr_full  <= #1 wfull;
-			end
+	// EMPTY
+	// WC: wptr did not increase
+	always @(posedge rclk)
+	  if (rrst)
+	    empty <= #1 1'b1;
+	  else if (rreq)
+	    empty <= #1 bin2gray(rptr +1'h1) == sswptr_gray;
+	  else
+	    empty <= #1 empty & (rptr_gray == sswptr_gray);
+
+
+	// FULL
+	// WC: rptr did not increase
+	always @(posedge wclk)
+	  if (wrst)
+	    full <= #1 1'b0;
+	  else if (wreq)
+	    full <= #1 bin2gray(wptr +2'h2) == ssrptr_gray;
+	  else
+	    full <= #1 full & (bin2gray(wptr + 2'h1) == ssrptr_gray);
+
 
 	// hookup generic dual ported memory
 	generic_dpram #(AWIDTH, DWIDTH) fifo_dc_mem(

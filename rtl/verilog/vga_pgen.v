@@ -37,16 +37,21 @@
 
 //  CVS Log
 //
-//  $Id: vga_pgen.v,v 1.6 2003-05-07 09:48:54 rherveille Exp $
+//  $Id: vga_pgen.v,v 1.7 2003-08-01 11:46:38 rherveille Exp $
 //
-//  $Date: 2003-05-07 09:48:54 $
-//  $Revision: 1.6 $
+//  $Date: 2003-08-01 11:46:38 $
+//  $Revision: 1.7 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.6  2003/05/07 09:48:54  rherveille
+//               Fixed some Wishbone RevB.3 related bugs.
+//               Changed layout of the core. Blocks are located more logically now.
+//               Started work on a dual clocked/double edge 12bit output. Commonly used by external devices like DVI transmitters.
+//
 //               Revision 1.5  2002/04/05 06:24:35  rherveille
 //               Fixed a potential reset bug in the hint & vint generation.
 //
@@ -263,7 +268,8 @@ module vga_pgen (
 	        eov   <= #1 seof & !dseof;
 	    end
 
-	    
+
+`ifdef VGA_12BIT_DVI
 	always @(posedge pclk_i)
 	  if (pclk_ena)
 	    begin
@@ -272,6 +278,21 @@ module vga_pgen (
 	        csync_o <= #1 icsync ^ ctrl_CSyncL;
 	        blank_o <= #1 iblank ^ ctrl_BlankL;
 	    end
+`else
+	reg hsync, vsync, csync, blank;
+	always @(posedge pclk_i)
+	    begin
+	        hsync <= #1 ihsync ^ ctrl_HSyncL;
+	        vsync <= #1 ivsync ^ ctrl_VSyncL;
+	        csync <= #1 icsync ^ ctrl_CSyncL;
+	        blank <= #1 iblank ^ ctrl_BlankL;
+
+	        hsync_o <= #1 hsync;
+	        vsync_o <= #1 vsync;
+	        csync_o <= #1 csync;
+	        blank_o <= #1 blank;
+	    end
+`endif
 
 
 
@@ -465,7 +486,7 @@ module vga_pgen (
 	// The cursor_processor pipelines introduce a delay between the color
 	// processor's rgb_fifo_wreq and the rgb_fifo_full signals. To compensate
 	// for this we double the rgb_fifo.
-	wire [3:0] rgb_fifo_nword;
+	wire [4:0] rgb_fifo_nword;
 
 	vga_fifo #(4, 24) rgb_fifo (
 		.clk    ( clk_i          ),
@@ -482,7 +503,7 @@ module vga_pgen (
 		.afull  ( )
 	);
 
-	assign rgb_fifo_full = rgb_fifo_nword[3];
+	assign rgb_fifo_full = rgb_fifo_nword[3]; // actually half full
 
 	assign line_fifo_rreq = gate & pclk_ena;
 

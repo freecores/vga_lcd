@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: vga_enh_top.v,v 1.5 2003-07-03 15:09:06 rherveille Exp $
+//  $Id: vga_enh_top.v,v 1.6 2003-08-01 11:46:38 rherveille Exp $
 //
-//  $Date: 2003-07-03 15:09:06 $
-//  $Revision: 1.5 $
+//  $Date: 2003-08-01 11:46:38 $
+//  $Revision: 1.6 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.5  2003/07/03 15:09:06  rherveille
+//               Removed 'or negedge arst' from sluint/luint sensitivity list
+//
 //               Revision 1.4  2003/05/07 09:48:54  rherveille
 //               Fixed some Wishbone RevB.3 related bugs.
 //               Changed layout of the core. Blocks are located more logically now.
@@ -399,18 +402,18 @@ module vga_enh_top (
 	);
 
 	// hookup line-fifo
+	wire ctrl_ven_not = ~ctrl_ven;
 	vga_fifo_dc #(LINE_FIFO_AWIDTH, 24) line_fifo (
-		.rclk     ( clk_p_i            ),
-		.wclk     ( wb_clk_i           ),
-		.aclr     ( ctrl_ven           ),
-		.wreq     ( line_fifo_wreq     ),
-		.d        ( line_fifo_d        ),
-		.rreq     ( line_fifo_rreq     ),
-		.q        ( line_fifo_q        ),
-		.rd_empty ( line_fifo_empty_rd ),
-		.rd_full  ( ),
-		.wr_empty ( ),
-		.wr_full  ( line_fifo_full_wr  )
+		.rclk  ( clk_p_i            ),
+		.wclk  ( wb_clk_i           ),
+		.rclr  ( 1'b0               ),
+		.wclr  ( ctrl_ven_not       ),
+		.wreq  ( line_fifo_wreq     ),
+		.d     ( line_fifo_d        ),
+		.rreq  ( line_fifo_rreq     ),
+		.q     ( line_fifo_q        ),
+		.empty ( line_fifo_empty_rd ),
+		.full  ( line_fifo_full_wr  )
 	);
 
 	// generate interrupt signal when reading line-fifo while it is empty (line-fifo under-run interrupt)

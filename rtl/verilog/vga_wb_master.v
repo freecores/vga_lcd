@@ -37,16 +37,21 @@
 
 //  CVS Log
 //
-//  $Id: vga_wb_master.v,v 1.14 2003-05-07 09:48:54 rherveille Exp $
+//  $Id: vga_wb_master.v,v 1.15 2003-08-01 11:46:38 rherveille Exp $
 //
-//  $Date: 2003-05-07 09:48:54 $
-//  $Revision: 1.14 $
+//  $Date: 2003-08-01 11:46:38 $
+//  $Revision: 1.15 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.14  2003/05/07 09:48:54  rherveille
+//               Fixed some Wishbone RevB.3 related bugs.
+//               Changed layout of the core. Blocks are located more logically now.
+//               Started work on a dual clocked/double edge 12bit output. Commonly used by external devices like DVI transmitters.
+//
 //               Revision 1.13  2003/03/19 12:50:45  rherveille
 //               Changed timing generator; made it smaller and easier.
 //
@@ -437,8 +442,8 @@ module vga_wb_master (clk_i, rst_i, nrst_i,
 
 	//
 	// video-data buffer (temporary store data read from video memory)
-	wire [3:0] fb_data_fifo_nword;
-	wire       fb_data_fifo_full;
+	wire [4:0] fb_data_fifo_nword;
+//	wire       fb_data_fifo_full;
 
 	vga_fifo #(4, 32) data_fifo (
 		.clk    ( clk_i              ),
@@ -450,12 +455,11 @@ module vga_wb_master (clk_i, rst_i, nrst_i,
 		.rreq   ( fb_data_fifo_rreq  ),
 		.nword  ( fb_data_fifo_nword ),
 		.empty  ( fb_data_fifo_empty ),
-		.full   ( fb_data_fifo_full  ),
+		.full   ( ),//fb_data_fifo_full  ),
 		.aempty ( ),
 		.afull  ( )
 	);
 
-//	assign vmem_req = ~(fb_data_fifo_nword[3] | fb_data_fifo_full);
-	assign vmem_req = ~fb_data_fifo_nword[3];
+	assign vmem_req = ~fb_data_fifo_nword[4] & ~fb_data_fifo_nword[3];
 
 endmodule
