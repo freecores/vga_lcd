@@ -37,16 +37,22 @@
 
 //  CVS Log
 //
-//  $Id: vga_enh_top.v,v 1.1 2002-02-07 05:42:10 rherveille Exp $
+//  $Id: vga_enh_top.v,v 1.2 2002-03-04 11:01:59 rherveille Exp $
 //
-//  $Date: 2002-02-07 05:42:10 $
-//  $Revision: 1.1 $
+//  $Date: 2002-03-04 11:01:59 $
+//  $Revision: 1.2 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.1  2002/02/07 05:42:10  rherveille
+//               Fixed some bugs discovered by modified testbench
+//               Removed / Changed some strange logic constructions
+//               Started work on hardware cursor support (not finished yet)
+//               Changed top-level name to vga_enh_top.v
+//
 
 `include "timescale.v"
 `include "vga_defines.v"
@@ -123,10 +129,13 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 	wire         cursor0_en, cursor1_en;
 	wire [31:11] cursor0_ba, cursor1_ba;
 	wire         cursor0_ld, cursor1_ld;
+	wire         cursor0_res, cursor1_res;
+	wire [15: 0] cc0_dat_o, cc1_dat_o;
 
 	// to wb_slave
 	wire stat_avmp, stat_acmp, vmem_swint, clut_swint, hint, vint, sint;
 	reg luint;
+	wire [ 3: 0] cc0_adr_i, cc1_adr_i;
 
 	// from pixel generator
 	wire cgate; // composite gate signal
@@ -150,41 +159,47 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 	// hookup wishbone slave
 	vga_wb_slave u1 (
 		// wishbone interface
-		.CLK_I(wb_clk_i),
-		.RST_I(wb_rst_i),
-		.nRESET(arst),
-		.ADR_I(wbs_adr_i[11:2]),
-		.DAT_I(wbs_dat_i),
-		.DAT_O(wbs_dat_o),
-		.SEL_I(wbs_sel_i),
-		.WE_I(wbs_we_i),
-		.STB_I(wbs_stb_i),
-		.CYC_I(wbs_cyc_i),
-		.ACK_O(wbs_ack_o),
-		.ERR_O(wbs_err_o),
-		.INTA_O(wb_inta_o),
+		.clk_i(wb_clk_i),
+		.rst_i(wb_rst_i),
+		.arst_i(arst),
+		.adr_i(wbs_adr_i[11:2]),
+		.dat_i(wbs_dat_i),
+		.dat_o(wbs_dat_o),
+		.sel_i(wbs_sel_i),
+		.we_i(wbs_we_i),
+		.stb_i(wbs_stb_i),
+		.cyc_i(wbs_cyc_i),
+		.ack_o(wbs_ack_o),
+		.err_o(wbs_err_o),
+		.inta_o(wb_inta_o),
 
 		// internal connections
-		.bl(ctrl_bl),
-		.csl(ctrl_csl),
-		.vsl(ctrl_vsl),
-		.hsl(ctrl_hsl),
-		.pc(ctrl_pc),
-		.cd(ctrl_cd),
-		.vbl(ctrl_vbl),
-		.cbsw(ctrl_cbsw),
-		.vbsw(ctrl_vbsw),
-		.ven(ctrl_ven),
-		.acmp(stat_acmp),
-		.avmp(stat_avmp),
+		.bl(ctrl_bl),               // blank polarization level
+		.csl(ctrl_csl),             // csync polarization level
+		.vsl(ctrl_vsl),             // vsync polarization level
+		.hsl(ctrl_hsl),             // hsync polarization level
+		.pc(ctrl_pc),               // pseudo-color mode (only for 8bpp)
+		.cd(ctrl_cd),               // color depth
+		.vbl(ctrl_vbl),             // video memory burst length
+		.cbsw(ctrl_cbsw),           // color lookup table bank switch enable
+		.vbsw(ctrl_vbsw),           // video bank switch enable
+		.ven(ctrl_ven),             // video enable
+		.acmp(stat_acmp),           // active color lookup table page
+		.avmp(stat_avmp),           // active video memory page
+		.cursor0_res(cursor0_res),  // cursor0 resolution
 		.cursor0_en(cursor0_en),    // cursor0 enable
 		.cursor0_xy(cursor0_xy),    // cursor0 (x,y)
 		.cursor0_ba(cursor0_ba),    // curso0 video memory base address
 		.cursor0_ld(cursor0_ld),    // reload curso0 from video memory
+ 		.cc0_adr_i(cc0_adr_i),      // cursor0 color registers address
+		.cc0_dat_o(cc0_dat_o),      // cursor0 color registers data
+		.cursor1_res(cursor1_res),  // cursor1 resolution
 		.cursor1_en(cursor1_en),    // cursor1 enable
 		.cursor1_xy(cursor1_xy),    // cursor1 (x,y)
 		.cursor1_ba(cursor1_ba),    // cursor1 video memory base address
 		.cursor1_ld(cursor1_ld),    // reload cursor1 from video memory
+ 		.cc1_adr_i(cc1_adr_i),      // cursor1 color registers address
+		.cc1_dat_o(cc1_dat_o),      // cursor1 color registers data
 		.vbsint_in(vmem_swint),     // video memory bank switch interrupt
 		.cbsint_in(clut_swint),     // clut memory bank switch interrupt
 		.hint_in(hint),             // horizontal interrupt
@@ -231,13 +246,19 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 		.ctrl_cbsw(ctrl_cbsw),
 		.ctrl_vbsw(ctrl_vbsw),
 		.cursor0_en(cursor0_en),    // cursor0 enable
+		.cursor0_res(cursor0_res),  // cursor0 resolution
 		.cursor0_xy(cursor0_xy),    // cursor0 (x,y)
 		.cursor0_ba(cursor0_ba),    // curso0 video memory base address
 		.cursor0_ld(cursor0_ld),    // reload curso0 from video memory
+ 		.cc0_adr_o(cc0_adr_i),      // cursor0 color registers address
+		.cc0_dat_i(cc0_dat_o),      // cursor0 color registers data
 		.cursor1_en(cursor1_en),    // cursor1 enable
+		.cursor1_res(cursor1_res),  // cursor1 resolution
 		.cursor1_xy(cursor1_xy),    // cursor1 (x,y)
 		.cursor1_ba(cursor1_ba),    // cursor1 video memory base address
 		.cursor1_ld(cursor1_ld),    // reload cursor1 from video memory
+ 		.cc1_adr_o(cc1_adr_i),      // cursor1 color registers address
+		.cc1_dat_i(cc1_dat_o),      // cursor1 color registers data
 		.VBAa(VBARa),
 		.VBAb(VBARb),
 		.Thgate(Thgate),
@@ -364,3 +385,8 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 			end
 
 endmodule
+
+
+
+
+

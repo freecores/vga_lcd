@@ -37,16 +37,22 @@
 
 //  CVS Log
 //
-//  $Id: vga_colproc.v,v 1.6 2002-02-07 05:42:10 rherveille Exp $
+//  $Id: vga_colproc.v,v 1.7 2002-03-04 11:01:59 rherveille Exp $
 //
-//  $Date: 2002-02-07 05:42:10 $
-//  $Revision: 1.6 $
+//  $Date: 2002-03-04 11:01:59 $
+//  $Revision: 1.7 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.6  2002/02/07 05:42:10  rherveille
+//               Fixed some bugs discovered by modified testbench
+//               Removed / Changed some strange logic constructions
+//               Started work on hardware cursor support (not finished yet)
+//               Changed top-level name to vga_enh_top.v
+//
 
 `include "timescale.v"
 
@@ -61,13 +67,13 @@ module vga_colproc(clk, srst, vdat_buffer_di, ColorDepth, PseudoColor,
 	input clk;                    // master clock
 	input srst;                   // synchronous reset
 
-	input [31:0] vdat_buffer_di; // video memory data input
+	input [31:0] vdat_buffer_di;  // video memory data input
 
 	input [1:0] ColorDepth;       // color depth (8bpp, 16bpp, 24bpp)
 	input       PseudoColor;      // pseudo color enabled (only for 8bpp color depth)
 
 	input  vdat_buffer_empty;
-	output vdat_buffer_rreq;     // pixel buffer read request
+	output vdat_buffer_rreq;      // pixel buffer read request
 	reg    vdat_buffer_rreq;
 
 	input  rgb_fifo_full;
@@ -160,13 +166,21 @@ module vga_colproc(clk, srst, vdat_buffer_di, ColorDepth, PseudoColor,
 						nxt_state = idle;
 
 			col_8bpp:
-				// do NOT check for rgb_fifo_full here, because in 8bpp_pc mode
-				// the color-processor always finishes the current 4pixel-block
-				// i.e. it runs until colcnt = '11'
+				// Do NOT check for rgb_fifo_full here.
+				// In 8bpp pseudo-color mode the color-processor must always finish
+				// the current 4pixel-block(i.e. it runs until colcnt = '11').
 				// This is because of the late clut-response which shuffles all
 				// signals the state-machine depends on.
+				// Because of this we can not do an early video_memory_data fetch,
+				// i.e. we can not jump to the fill_buf state. Instead we always
+				// jump to idle and check for rgb_fifo_full there.
+				//
+				// The addition of the cursor-processors forces us to increase the
+				// rgb-fifo size. The increased rgb-fifo also handles the above
+				// described problem. Thus erradicating the above comment.
+				// We add the early video_memory_data fetch again.
 				if (!(|colcnt))
-					if (!vdat_buffer_empty)
+					if (!vdat_buffer_empty && !rgb_fifo_full)
 						nxt_state = fill_buf;
 					else
 						nxt_state = idle;
@@ -308,13 +322,21 @@ module vga_colproc(clk, srst, vdat_buffer_di, ColorDepth, PseudoColor,
 
 			col_8bpp:
 			begin
-				// do NOT check for rgb_fifo_full here, because in 8bpp_pc mode
-				// the color-processor always finishes the current 4pixel-block
-				// i.e. it runs until colcnt = '11'.
+				// Do NOT check for rgb_fifo_full here.
+				// In 8bpp pseudo-color mode the color-processor must always finish
+				// the current 4pixel-block(i.e. it runs until colcnt = '11').
 				// This is because of the late clut-response which shuffles all
 				// signals the state-machine depends on.
+				// Because of this we can not do an early video_memory_data fetch,
+				// i.e. we can not jump to the fill_buf state. Instead we always
+				// jump to idle and check for rgb_fifo_full there.
+				//
+				// The addition of the cursor-processors forces us to increase the
+				// rgb-fifo size. The increased rgb-fifo also handles the above
+				// described problem. Thus erradicating the above comment.
+				// We add the early video_memory_data fetch again.
 				if (!(|colcnt))
-					if (!vdat_buffer_empty && !(|colcnt) )
+					if (!vdat_buffer_empty && !rgb_fifo_full)
 						ivdat_buf_rreq = 1'b1;
 
 				RGBbuf_wreq = clut_ack;
@@ -473,18 +495,5 @@ module vga_colproc(clk, srst, vdat_buffer_di, ColorDepth, PseudoColor,
 		else if (RGBbuf_wreq)
 			colcnt <= #1 colcnt -2'h1;
 endmodule
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

@@ -37,16 +37,20 @@
 
 //  CVS Log
 //
-//  $Id: vga_wb_master.v,v 1.7 2002-02-16 10:40:00 rherveille Exp $
+//  $Id: vga_wb_master.v,v 1.8 2002-03-04 11:01:59 rherveille Exp $
 //
-//  $Date: 2002-02-16 10:40:00 $
-//  $Revision: 1.7 $
+//  $Date: 2002-03-04 11:01:59 $
+//  $Revision: 1.8 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.7  2002/02/16 10:40:00  rherveille
+//               Some minor bug-fixes.
+//               Changed vga_ssel into vga_curproc (cursor processor).
+//
 //               Revision 1.6  2002/02/07 05:42:10  rherveille
 //               Fixed some bugs discovered by modified testbench
 //               Removed / Changed some strange logic constructions
@@ -59,7 +63,8 @@
 
 module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, sel_o, ack_i, err_i, dat_i, sint,
 	ctrl_ven, ctrl_cd, ctrl_pc, ctrl_vbl, ctrl_vbsw, ctrl_cbsw, 
-	cursor0_en, cursor0_xy, cursor0_ba, cursor0_ld, cursor1_en, cursor1_xy, cursor1_ba, cursor1_ld,
+	cursor0_en, cursor0_res, cursor0_xy, cursor0_ba, cursor0_ld, cc0_adr_o, cc0_dat_i,
+	cursor1_en, cursor1_res, cursor1_xy, cursor1_ba, cursor1_ld, cc1_adr_o, cc1_dat_i,
 	VBAa, VBAb, Thgate, Tvgate,
 	stat_avmp, stat_acmp, vmem_switch, clut_switch, line_fifo_wreq, line_fifo_d, line_fifo_full,
 	clut_req, clut_ack, clut_adr, clut_q);
@@ -95,14 +100,20 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 	input       ctrl_vbsw;  // enable video bank switching
 	input       ctrl_cbsw;  // enable clut bank switching
 
-	input         cursor0_en; // enable hardware cursor0
-	input [31: 0] cursor0_xy; // (x,y) address hardware cursor0
-	input [31:11] cursor0_ba; // cursor0 video memory base address
-	input         cursor0_ld; // reload cursor0 from video memory
-	input         cursor1_en; // enable hardware cursor1
-	input [31: 0] cursor1_xy; // (x,y) address hardware cursor1
-	input [31:11] cursor1_ba; // cursor1 video memory base address
-	input         cursor1_ld; // reload cursor1 from video memory
+	input          cursor0_en;  // enable hardware cursor0
+	input          cursor0_res; // cursor0 resolution
+	input  [31: 0] cursor0_xy;  // (x,y) address hardware cursor0
+	input  [31:11] cursor0_ba;  // cursor0 video memory base address
+	input          cursor0_ld;  // reload cursor0 from video memory
+	output [ 3: 0] cc0_adr_o;   // cursor0 color registers address output
+	input  [15: 0] cc0_dat_i;   // cursor0 color registers data input
+	input          cursor1_en;  // enable hardware cursor1
+	input          cursor1_res; // cursor1 resolution
+	input  [31: 0] cursor1_xy;  // (x,y) address hardware cursor1
+	input  [31:11] cursor1_ba;  // cursor1 video memory base address
+	input          cursor1_ld;  // reload cursor1 from video memory
+	output [ 3: 0] cc1_adr_o;   // cursor1 color registers address output
+	input  [15: 0] cc1_dat_i;   // cursor1 color registers data input
 
 	// video memory addresses
 	input [31: 2] VBAa;     // video memory base address A
@@ -421,6 +432,7 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 `ifdef VGA_HWC1	// generate Hardware Cursor1 (if enabled)
 	reg scursor1_ld;
 	reg scursor1_en;
+	reg scursor1_res;
 	reg [31:0] scursor1_xy;
 
 	always@(posedge clk_i)
@@ -439,6 +451,10 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 		if (scursor1_ld)
 			scursor1_xy <= #1 cursor1_xy;
 
+	always@(posedge clk_i)
+		if (scursor1_ld)
+			scursor1_res <= #1 cursor1_res;
+
 	vga_curproc hw_cursor1 (
 		.clk(clk_i),
 		.rst_i(sclr),
@@ -447,10 +463,13 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 		.idat(color_proc_q),
 		.idat_wreq(color_proc_wreq),
 		.cursor_xy(scursor1_xy),
+		.cursor_res(scursor1_res),
 		.cursor_en(scursor1_en),
-		.cursor_adr(cursor_adr),
+		.cursor_wadr(cursor_adr),
 		.cursor_we(cursor1_we),
-		.cursor_dat(dat_i),
+		.cursor_wdat(dat_i),
+		.cc_adr_o(cc1_adr_o),
+		.cc_dat_i(cc1_dat_i),
 		.rgb_fifo_wreq(ssel1_wreq),
 		.rgb(ssel1_q)
 	);
@@ -471,6 +490,8 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 	assign ssel1_wreq = color_proc_wreq;
 	assign ssel1_q    = color_proc_q;
 
+	assign cc1_adr_0  = 4'h0;
+
 `ifdef VGA_HWC0	// generate additional signals for Hardware Cursor0 (if enabled)
 	wire sddImDoneFifoQ, sdImDoneFifoQ;
 
@@ -484,6 +505,7 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 `ifdef VGA_HWC0	// generate Hardware Cursor0 (if enabled)
 	reg scursor0_ld;
 	reg scursor0_en;
+	reg scursor0_res;
 	reg [31:0] scursor0_xy;
 
 	always@(posedge clk_i)
@@ -502,6 +524,10 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 		if (scursor0_ld)
 			scursor0_xy <= #1 cursor0_xy;
 
+	always@(posedge clk_i)
+		if (scursor0_ld)
+			scursor0_res <= #1 cursor0_res;
+
 	vga_curproc hw_cursor0 (
 		.clk(clk_i),
 		.rst_i(sclr),
@@ -511,19 +537,28 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 		.idat_wreq(ssel1_wreq),
 		.cursor_xy(scursor0_xy),
 		.cursor_en(scursor0_en),
-		.cursor_adr(cursor_adr),
+		.cursor_res(scursor0_res),
+		.cursor_wadr(cursor_adr),
 		.cursor_we(cursor0_we),
-		.cursor_dat(dat_i),
+		.cursor_wdat(dat_i),
+		.cc_adr_o(cc0_adr_o),
+		.cc_dat_i(cc0_dat_i),
 		.rgb_fifo_wreq(rgb_fifo_wreq),
 		.rgb(rgb_fifo_d)
 	);
 `else	// Hardware Cursor0 disabled, generate pass-through signals
 	assign rgb_fifo_wreq = ssel1_wreq;
 	assign rgb_fifo_d = ssel1_q;
+
+	assign cc0_adr_o  = 4'h0;
 `endif
 
-	// hookup RGB buffer (temporary station between WISHBONE-clock-domain and pixel-clock-domain)
-	vga_fifo #(3, 24) rgb_fifo (
+	// hookup RGB buffer (temporary station between WISHBONE-clock-domain 
+	// and pixel-clock-domain)
+	// The cursor_processor pipelines introduce a delay between the color
+	// processor's rgb_fifo_wreq and the rgb_fifo_full signals. To compensate
+	// for this we double the rgb_fifo.
+	vga_fifo #(4, 24) rgb_fifo (
 		.clk(clk_i),
 		.aclr(1'b1),
 		.sclr(sclr),
@@ -540,7 +575,5 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 	assign line_fifo_wreq = rgb_fifo_rreq;
 
 endmodule
-
-
 
 

@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: vga_wb_slave.v,v 1.7 2002-02-25 06:13:44 rherveille Exp $
+//  $Id: vga_wb_slave.v,v 1.8 2002-03-04 11:01:59 rherveille Exp $
 //
-//  $Date: 2002-02-25 06:13:44 $
-//  $Revision: 1.7 $
+//  $Date: 2002-03-04 11:01:59 $
+//  $Revision: 1.8 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.7  2002/02/25 06:13:44  rherveille
+//               Fixed dat_o incomplete sensitivity list.
+//
 //               Revision 1.6  2002/02/07 05:42:10  rherveille
 //               Fixed some bugs discovered by modified testbench
 //               Removed / Changed some strange logic constructions
@@ -58,9 +61,10 @@
 `include "timescale.v"
 `include "vga_defines.v"
 
-module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_I, CYC_I, ACK_O, ERR_O, INTA_O,
+module vga_wb_slave(clk_i, rst_i, arst_i, adr_i, dat_i, dat_o, sel_i, we_i, stb_i, cyc_i, ack_o, err_o, inta_o,
 		bl, csl, vsl, hsl, pc, cd, vbl, cbsw, vbsw, ven, avmp, acmp, 
-		cursor0_en, cursor0_xy, cursor0_ba, cursor0_ld, cursor1_en, cursor1_xy, cursor1_ba, cursor1_ld,
+		cursor0_res, cursor0_en, cursor0_xy, cursor0_ba, cursor0_ld, cc0_adr_i, cc0_dat_o, 
+		cursor1_res, cursor1_en, cursor1_xy, cursor1_ba, cursor1_ld, cc1_adr_i, cc1_dat_o,
 		vbsint_in, cbsint_in, hint_in, vint_in, luint_in, sint_in,
 		Thsync, Thgdel, Thgate, Thlen, Tvsync, Tvgdel, Tvgate, Tvlen, VBARa, VBARb, clut_acc, clut_ack, clut_q);
 
@@ -69,23 +73,23 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 	//
 
 	// wishbone slave interface
-	input         CLK_I;
-	input         RST_I;
-	input         nRESET;
-	input  [11:2] ADR_I;
-	input  [31:0] DAT_I;
-	output [31:0] DAT_O;
-	reg [31:0] DAT_O;
-	input  [ 3:0] SEL_I;
-	input         WE_I;
-	input         STB_I;
-	input         CYC_I;
-	output        ACK_O;
-	reg ACK_O;
-	output        ERR_O;
-	reg ERR_O;
-	output        INTA_O;
-	reg INTA_O;
+	input         clk_i;
+	input         rst_i;
+	input         arst_i;
+	input  [11:2] adr_i;
+	input  [31:0] dat_i;
+	output [31:0] dat_o;
+	reg [31:0] dat_o;
+	input  [ 3:0] sel_i;
+	input         we_i;
+	input         stb_i;
+	input         cyc_i;
+	output        ack_o;
+	reg ack_o;
+	output        err_o;
+	reg err_o;
+	output        inta_o;
+	reg inta_o;
 
 	// control register settings
 	output bl;         // blanking level
@@ -100,14 +104,20 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 	output ven;        // video system enable
 
 	// hardware cursor settings
-	output         cursor0_en;
-	output [31: 0] cursor0_xy;
+	output         cursor0_res;  // cursor0 resolution
+	output         cursor0_en;   // cursor0 enable
+	output [31: 0] cursor0_xy;   // cursor0 location
 	output [31:11] cursor0_ba;   // cursor0 base address
 	output         cursor0_ld;   // reload cursor0 from video memory
-	output         cursor1_en;
-	output [31: 0] cursor1_xy;
+	input  [ 3: 0] cc0_adr_i;    // cursor0 color register address
+	output [15: 0] cc0_dat_o;    // cursor0 color register data
+	output         cursor1_res;  // cursor1 resolution
+	output         cursor1_en;   // cursor1 enable
+	output [31: 0] cursor1_xy;   // cursor1 location
 	output [31:11] cursor1_ba;   // cursor1 base address
 	output         cursor1_ld;   // reload cursor1 from video memory
+	input  [ 3: 0] cc1_adr_i;    // cursor1 color register address
+	output [15: 0] cc1_dat_o;    // cursor1 color register data
 
 	reg [31: 0] cursor0_xy;
 	reg [31:11] cursor0_ba;
@@ -153,28 +163,32 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 	//
 	// variable declarations
 	//
-	parameter REG_ADR_HIBIT = 3;
+	parameter REG_ADR_HIBIT = 7;
 
-	wire [REG_ADR_HIBIT:0] REG_ADR  = ADR_I[REG_ADR_HIBIT +2 : 2];
-	wire                   CLUT_ADR = ADR_I[11];
+	wire [REG_ADR_HIBIT:0] REG_ADR  = adr_i[REG_ADR_HIBIT : 2];
+	wire                   CLUT_ADR = adr_i[11];
 
-	parameter [REG_ADR_HIBIT : 0] CTRL_ADR  = 4'b0000;
-	parameter [REG_ADR_HIBIT : 0] STAT_ADR  = 4'b0001;
-	parameter [REG_ADR_HIBIT : 0] HTIM_ADR  = 4'b0010;
-	parameter [REG_ADR_HIBIT : 0] VTIM_ADR  = 4'b0011;
-	parameter [REG_ADR_HIBIT : 0] HVLEN_ADR = 4'b0100;
-	parameter [REG_ADR_HIBIT : 0] VBARA_ADR = 4'b0101;
-	parameter [REG_ADR_HIBIT : 0] VBARB_ADR = 4'b0110;
-	parameter [REG_ADR_HIBIT : 0] C0XY_ADR  = 4'b1000;
-	parameter [REG_ADR_HIBIT : 0] C0BAR_ADR = 4'b1001;
-	parameter [REG_ADR_HIBIT : 0] C1XY_ADR  = 4'b1010;
-	parameter [REG_ADR_HIBIT : 0] C1BAR_ADR = 4'b1011;
+	parameter [REG_ADR_HIBIT : 0] CTRL_ADR  = 6'b00_0000;
+	parameter [REG_ADR_HIBIT : 0] STAT_ADR  = 6'b00_0001;
+	parameter [REG_ADR_HIBIT : 0] HTIM_ADR  = 6'b00_0010;
+	parameter [REG_ADR_HIBIT : 0] VTIM_ADR  = 6'b00_0011;
+	parameter [REG_ADR_HIBIT : 0] HVLEN_ADR = 6'b00_0100;
+	parameter [REG_ADR_HIBIT : 0] VBARA_ADR = 6'b00_0101;
+	parameter [REG_ADR_HIBIT : 0] VBARB_ADR = 6'b00_0110;
+	parameter [REG_ADR_HIBIT : 0] C0XY_ADR  = 6'b00_1100;
+	parameter [REG_ADR_HIBIT : 0] C0BAR_ADR = 6'b00_1101;
+	parameter [REG_ADR_HIBIT : 0] CCR0_ADR  = 6'b01_0???;
+	parameter [REG_ADR_HIBIT : 0] C1XY_ADR  = 6'b01_1100;
+	parameter [REG_ADR_HIBIT : 0] C1BAR_ADR = 6'b01_1101;
+	parameter [REG_ADR_HIBIT : 0] CCR1_ADR  = 6'b10_0???;
 
 
 	reg [31:0] ctrl, stat, htim, vtim, hvlen;
 	wire hint, vint, vbsint, cbsint, luint, sint;
 	wire hie, vie, vbsie, cbsie;
 	wire acc, acc32, reg_acc, reg_wacc;
+	wire cc0_acc, cc1_acc;
+	wire [31:0] ccr0_dat_o, ccr1_dat_o;
 
 
 	reg [31:0] reg_dato; // data output from registers
@@ -183,23 +197,26 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 	// Module body
 	//
 
-	assign acc      =  CYC_I & STB_I;
-	assign acc32    = (SEL_I == 4'b1111);
+	assign acc      =  cyc_i & stb_i;
+	assign acc32    = (sel_i == 4'b1111);
 	assign clut_acc =  CLUT_ADR & acc & acc32;
 	assign reg_acc  = !CLUT_ADR & acc & acc32;
-	assign reg_wacc =  reg_acc & WE_I;
+	assign reg_wacc =  reg_acc & we_i;
 
-	always@(posedge CLK_I)
-		ACK_O <= #1 ((reg_acc & acc32) | clut_ack) & !ACK_O;
+	assign cc0_acc  = CCR0_ADR & acc & acc32;
+	assign cc1_acc  = CCR1_ADR & acc & acc32;
 
-	always@(posedge CLK_I)
-		ERR_O <= #1 acc & !acc32;
+	always@(posedge clk_i)
+		ack_o <= #1 ((reg_acc & acc32) | clut_ack) & !ack_o;
+
+	always@(posedge clk_i)
+		err_o <= #1 acc & !acc32 & !err_o;
 
 
 	// generate registers
-	always@(posedge CLK_I or negedge nRESET)
+	always@(posedge clk_i or negedge arst_i)
 	begin : gen_regs
-		if(!nRESET)
+		if(!arst_i)
 			begin
 				htim       <= #1 0;
 				vtim       <= #1 0;
@@ -211,7 +228,7 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 				cursor1_xy <= #1 0;
 				cursor1_ba <= #1 0;
 			end
-		else if (RST_I)
+		else if (rst_i)
 			begin
 				htim       <= #1 0;
 				vtim       <= #1 0;
@@ -224,33 +241,33 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 				cursor1_ba <= #1 0;
 			end
 		else if (reg_wacc)
-			case (ADR_I)	// synopsis full_case parallel_case
-				HTIM_ADR  : htim       <= #1 DAT_I;
-				VTIM_ADR  : vtim       <= #1 DAT_I;
-				HVLEN_ADR : hvlen      <= #1 DAT_I;
-				VBARA_ADR : VBARa      <= #1 DAT_I[31: 2];
-				VBARB_ADR : VBARb      <= #1 DAT_I[31: 2];
-				C0XY_ADR  : cursor0_xy <= #1 DAT_I[31: 0];
-				C0BAR_ADR : cursor0_ba <= #1 DAT_I[31:11];
-				C1XY_ADR  : cursor1_xy <= #1 DAT_I[31: 0];
-				C1BAR_ADR : cursor1_ba <= #1 DAT_I[31:11];
+			case (adr_i)	// synopsis full_case parallel_case
+				HTIM_ADR  : htim       <= #1 dat_i;
+				VTIM_ADR  : vtim       <= #1 dat_i;
+				HVLEN_ADR : hvlen      <= #1 dat_i;
+				VBARA_ADR : VBARa      <= #1 dat_i[31: 2];
+				VBARB_ADR : VBARb      <= #1 dat_i[31: 2];
+				C0XY_ADR  : cursor0_xy <= #1 dat_i[31: 0];
+				C0BAR_ADR : cursor0_ba <= #1 dat_i[31:11];
+				C1XY_ADR  : cursor1_xy <= #1 dat_i[31: 0];
+				C1BAR_ADR : cursor1_ba <= #1 dat_i[31:11];
 			endcase
 	end
 
-	always@(posedge CLK_I)
+	always@(posedge clk_i)
 		begin
-			cursor0_ld <= #1 reg_wacc && (ADR_I == C0BAR_ADR);
-			cursor1_ld <= #1 reg_wacc && (ADR_I == C1BAR_ADR);
+			cursor0_ld <= #1 reg_wacc && (adr_i == C0BAR_ADR);
+			cursor1_ld <= #1 reg_wacc && (adr_i == C1BAR_ADR);
 		end
 
 	// generate control register
-	always@(posedge CLK_I or negedge nRESET)
-		if (!nRESET)
+	always@(posedge clk_i or negedge arst_i)
+		if (!arst_i)
 			ctrl <= #1 0;
-		else if (RST_I)
+		else if (rst_i)
 			ctrl <= #1 0;
 		else if (reg_wacc & (REG_ADR == CTRL_ADR) )
-			ctrl <= #1 DAT_I;
+			ctrl <= #1 dat_i;
 		else
 			begin
 				ctrl[6] <= #1 ctrl[6] & !cbsint_in;
@@ -259,10 +276,10 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 
 
 	// generate status register
-	always@(posedge CLK_I or negedge nRESET)
-		if (!nRESET)
+	always@(posedge clk_i or negedge arst_i)
+		if (!arst_i)
 			stat <= #1 0;
-		else if (RST_I)
+		else if (rst_i)
 			stat <= #1 0;
 		else
 			begin
@@ -282,12 +299,12 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 
 				if (reg_wacc & (REG_ADR == STAT_ADR) )
 					begin
-						stat[7] <= #1 cbsint_in | (stat[7] & !DAT_I[7]);
-						stat[6] <= #1 vbsint_in | (stat[6] & !DAT_I[6]);
-						stat[5] <= #1 hint_in   | (stat[5] & !DAT_I[5]);
-						stat[4] <= #1 vint_in   | (stat[4] & !DAT_I[4]);
-						stat[1] <= #1 luint_in  | (stat[3] & !DAT_I[1]);
-						stat[0] <= #1 sint_in   | (stat[0] & !DAT_I[0]);
+						stat[7] <= #1 cbsint_in | (stat[7] & !dat_i[7]);
+						stat[6] <= #1 vbsint_in | (stat[6] & !dat_i[6]);
+						stat[5] <= #1 hint_in   | (stat[5] & !dat_i[5]);
+						stat[4] <= #1 vint_in   | (stat[4] & !dat_i[4]);
+						stat[1] <= #1 luint_in  | (stat[3] & !dat_i[1]);
+						stat[0] <= #1 sint_in   | (stat[0] & !dat_i[0]);
 					end
 				else
 					begin
@@ -302,22 +319,24 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 
 
 	// decode control register
-	assign cursor1_en = ctrl[21];
-	assign cursor0_en = ctrl[20];
-	assign bl         = ctrl[15];
-	assign csl        = ctrl[14];
-	assign vsl        = ctrl[13];
-	assign hsl        = ctrl[12];
-	assign pc         = ctrl[11];
-	assign cd         = ctrl[10:9];
-	assign vbl        = ctrl[8:7];
-	assign cbsw       = ctrl[6];
-	assign vbsw       = ctrl[5];
-	assign cbsie      = ctrl[4];
-	assign vbsie      = ctrl[3];
-	assign hie        = ctrl[2];
-	assign vie        = ctrl[1];
-	assign ven        = ctrl[0];
+	assign cursor1_res = ctrl[25];
+	assign cursor1_en  = ctrl[24];
+	assign cursor0_res = ctrl[23];
+	assign cursor0_en  = ctrl[20];
+	assign bl          = ctrl[15];
+	assign csl         = ctrl[14];
+	assign vsl         = ctrl[13];
+	assign hsl         = ctrl[12];
+	assign pc          = ctrl[11];
+	assign cd          = ctrl[10:9];
+	assign vbl         = ctrl[8:7];
+	assign cbsw        = ctrl[6];
+	assign vbsw        = ctrl[5];
+	assign cbsie       = ctrl[4];
+	assign vbsie       = ctrl[3];
+	assign hie         = ctrl[2];
+	assign vie         = ctrl[1];
+	assign ven         = ctrl[0];
 
 	// decode status register
 	assign cbsint = stat[7];
@@ -339,11 +358,50 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 	assign Tvgate = vtim[15:0];
 	assign Tvlen  = hvlen[15:0];
 
+
+	`ifdef VGA_HWC0
+		// hookup cursor0 color registers
+		vga_cur_cregs cregs0(
+			.clk_i(clk_i),
+			.rst_i(rst_i),
+			.arst_i(arst_i),
+			.hsel_i(cc0_acc),
+			.hadr_i(adr_i[4:2]),
+			.hwe_i(we_i),
+			.hdat_i(dat_i),
+			.hdat_o(ccr0_dat_o), // host access
+			.hack_o(),
+			.cadr_i(cc0_adr_i),
+			.cdat_o(cc0_dat_o)   // cursor processor access
+		);
+	`else
+		assign ccr0_dat_0 = 32'h0;
+	`endif
+
+	`ifdef VGA_HWC1
+		// hookup cursor1 color registers
+		vga_cur_cregs cregs1(
+			.clk_i(clk_i),
+			.rst_i(rst_i),
+			.arst_i(arst_i),
+			.hsel_i(cc1_acc),
+			.hadr_i(adr_i[4:2]),
+			.hwe_i(we_i),
+			.hdat_i(dat_i),
+			.hdat_o(ccr1_dat_o), // host access
+			.hack_o(),
+			.cadr_i(cc1_adr_i),
+			.cdat_o(cc1_dat_o)   // cursor processor access
+		);
+	`else
+		assign ccr1_dat_o = 32'h0;
+	`endif
+
 	
 	// assign output
 	always@(REG_ADR or ctrl or stat or htim or vtim or hvlen or VBARa or VBARb or acmp or
 		cursor0_xy or cursor0_ba or cursor1_xy or cursor1_ba)
-	case (REG_ADR) // synopsis full_case parallel_case
+	casez (REG_ADR) // synopsis full_case parallel_case
 		CTRL_ADR  : reg_dato = ctrl;
 		STAT_ADR  : reg_dato = stat;
 		HTIM_ADR  : reg_dato = htim;
@@ -353,17 +411,19 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 		VBARB_ADR : reg_dato = {VBARb, 2'b0};
 		C0XY_ADR  : reg_dato = cursor0_xy;
 		C0BAR_ADR : reg_dato = {cursor0_ba, 11'h0};
+		CCR0_ADR  : reg_dato = ccr0_dat_o;
 		C1XY_ADR  : reg_dato = cursor1_xy;
 		C1BAR_ADR : reg_dato = {cursor1_ba, 11'h0};
+		CCR1_ADR  : reg_dato = ccr1_dat_o;
 		default   : reg_dato = 32'h0000_0000;
 	endcase
 
-	always@(posedge CLK_I)
-		DAT_O <= #1 reg_acc ? reg_dato : {8'h0, clut_q};
+	always@(posedge clk_i)
+		dat_o <= #1 reg_acc ? reg_dato : {8'h0, clut_q};
 
 	// generate interrupt request signal
-	always@(posedge CLK_I)
-		INTA_O <= #1 (hint & hie) | (vint & vie) | (vbsint & vbsie) | (cbsint & cbsie) | luint | sint;
+	always@(posedge clk_i)
+		inta_o <= #1 (hint & hie) | (vint & vie) | (vbsint & vbsie) | (cbsint & cbsie) | luint | sint;
 endmodule
 
 
