@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: test_bench_top.v,v 1.8 2003-05-07 14:39:19 rherveille Exp $
+//  $Id: test_bench_top.v,v 1.9 2003-08-22 07:12:31 rherveille Exp $
 //
-//  $Date: 2003-05-07 14:39:19 $
-//  $Revision: 1.8 $
+//  $Date: 2003-08-22 07:12:31 $
+//  $Revision: 1.9 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.8  2003/05/07 14:39:19  rherveille
+//               Added DVI tests
+//
 //               Revision 1.7  2003/05/07 09:45:28  rherveille
 //               Numerous updates and added checks
 //
@@ -164,7 +167,11 @@ reg	[7:0]	bank;
 
 `define USE_VC		1
 
+`ifdef VGA_12BIT_DVI
 parameter	PCLK_C = 20;
+`else
+parameter	PCLK_C = 30;
+`endif
 
 /////////////////////////////////////////////////////////////////////
 //
@@ -204,17 +211,17 @@ if(0)	// Full Regression Run
 else
 if(1)	// Quick Regression Run
    begin
-//	reg_test;
-//	tim_test;
+	reg_test;
+	tim_test;
 
-//	pd1_test;
-//	pd2_test;
-	
+	pd1_test;
+	pd2_test;
+
 `ifdef VGA_12BIT_DVI
 	dvi_pd_test;
 `endif
 
-//	ur_test;
+	ur_test;
    end
 else
    begin
