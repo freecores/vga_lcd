@@ -7,7 +7,7 @@
 ////          rudi@asics.ws                                      ////
 ////                                                             ////
 ////                                                             ////
-////  Downloaded from: http://www.opencores.org/cores/wb_dma/    ////
+////  Downloaded from: http://www.opencores.org/cores/vga_lcd/   ////
 ////                                                             ////
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: wb_slv_model.v,v 1.2 2002-02-07 05:38:32 rherveille Exp $
+//  $Id: wb_slv_model.v,v 1.3 2003-05-07 09:45:28 rherveille Exp $
 //
-//  $Date: 2002-02-07 05:38:32 $
-//  $Revision: 1.2 $
+//  $Date: 2003-05-07 09:45:28 $
+//  $Revision: 1.3 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.2  2002/02/07 05:38:32  rherveille
+//               Added wb_ack delay section to testbench
+//
 //               Revision 1.1  2001/08/21 05:42:32  rudi
 //
 //               - Changed Directory Structure
@@ -82,7 +85,7 @@ wire		mem_re, mem_we;
 wire	[31:0]	tmp;
 reg	[31:0]	dout, tmp2;
 
-reg		err, rty;
+reg		ack, err, rty;
 reg	[31:0]	del_ack;
 reg	[5:0]	delay;
 
@@ -94,6 +97,7 @@ reg	[5:0]	delay;
 initial
    begin
 	delay = 0;
+	ack = 0;
 	err = 0;
 	rty = 0;
 	#2;
@@ -132,15 +136,14 @@ always @(posedge clk)
 always @(posedge clk)
 	del_ack = ack ? 0 : {del_ack[30:0], cyc & stb};
 
-assign	ack = cyc & stb & ((delay==0) ? 1'b1 : del_ack[delay-1]);
+always	ack = #1 cyc & stb & ((delay==0) ? 1'b1 : del_ack[delay-1]);
+
 
 task fill_mem;
-input		mode;
-
-integer		n, mode;
+input mode;
+integer n, mode;
 
 begin
-
 for(n=0;n<(sz+1);n=n+1)
    begin
 	case(mode)
@@ -149,7 +152,17 @@ for(n=0;n<(sz+1);n=n+1)
 	   2:	mem[n] = { n[5:0], 2'h3, n[5:0], 2'h2, n[5:0], 2'h1, n[5:0], 2'h0};
 	endcase
    end
+end
+endtask
 
+task set_delay;
+input dly;
+
+reg [5:0] dly;
+begin
+    delay = dly;
+    $display("\n INFO: WISHBONE MEMORY MODEL (%M)");
+    $display("       Delay set to %d\n", delay);
 end
 endtask
 

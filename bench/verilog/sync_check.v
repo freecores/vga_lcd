@@ -37,25 +37,30 @@
 
 //  CVS Log
 //
-//  $Id: sync_check.v,v 1.3 2003-03-19 12:20:53 rherveille Exp $
+//  $Id: sync_check.v,v 1.4 2003-05-07 09:45:28 rherveille Exp $
 //
-//  $Date: 2003-03-19 12:20:53 $
-//  $Revision: 1.3 $
+//  $Date: 2003-05-07 09:45:28 $
+//  $Revision: 1.4 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.3  2003/03/19 12:20:53  rherveille
+//               Changed timing section in VGA core, changed testbench accordingly.
+//               Fixed bug in 'timing check' test.
+//
 //               Revision 1.2  2001/11/15 07:04:15  rherveille
 //               Updated testbench for VGA/LCD Core version 2.0
 //
 //
 //
 //
-//                        
+//
 
 `timescale 1ns / 10ps
+`include "vga_defines.v"
 
 module sync_check(	pclk, rst, enable, hsync, vsync, csync, blanc,
 			hpol, vpol, cpol, bpol,
@@ -203,13 +208,17 @@ always @(posedge pclk)
 
 initial bval = 1;
 always @(bdel2)
+`ifdef VGA_12BIT_DVI
+	bval = !(bval1 & (bdel2 > bh_start) & (bdel2 < bh_end));
+`else
 	bval = #1 !(bval1 & (bdel2 > bh_start) & (bdel2 < bh_end));
+`endif
 
 
 always @(bval or blanc)
 	#0.01
 	if(enable)
-	if(((blanc ^ bpol) != bval) & bcheck)
+	if(( (blanc ^ bpol) != bval) & bcheck)
 		$display("BLANK ERROR: Expected: %0d Got: %0d (%0t)",
 			bval, (blanc ^ bpol), $time);
 

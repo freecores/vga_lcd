@@ -37,16 +37,20 @@
 
 //  CVS Log
 //
-//  $Id: tests.v,v 1.6 2003-03-19 12:20:53 rherveille Exp $
+//  $Id: tests.v,v 1.7 2003-05-07 09:45:28 rherveille Exp $
 //
-//  $Date: 2003-03-19 12:20:53 $
-//  $Revision: 1.6 $
+//  $Date: 2003-05-07 09:45:28 $
+//  $Revision: 1.7 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.6  2003/03/19 12:20:53  rherveille
+//               Changed timing section in VGA core, changed testbench accordingly.
+//               Fixed bug in 'timing check' test.
+//
 //               Revision 1.5  2002/04/20 09:57:55  rherveille
 //               Changed testbench to reflect modified VGA timing generator.
 //
@@ -354,11 +358,12 @@ integer		n, p, l;
 reg	[31:0]	pn;
 reg	[31:0]	pra, paa, tmp;
 reg	[23:0]	pd;
-reg	[1:0]	cd;
+reg	[ 1:0]	cd;
 reg		pc;
 reg	[31:0]	data;
-reg [31:0] cbar;
-reg	[7:0]	vbl;
+reg	[31:0]	cbar;
+reg	[ 7:0]	vbl;
+reg	[ 5:0]	delay;
 
 begin
 
@@ -434,13 +439,16 @@ $display("*****************************************************\n");
 	m0.wb_wr1( `VTIM,  4'hf, {tvsync, tvgdel, tvgate} );
 	m0.wb_wr1( `HVLEN, 4'hf, {thlen, tvlen} );
 
-mode = 2;
-vbl = 0;
+mode  = 3;
+vbl   = 1;
+delay = 1;
 
+for(delay=0;delay<6;delay=delay+1)
+   begin
+	s0.set_delay(delay);
 for(vbl=0;vbl<4;vbl=vbl+1)
 for(mode=0;mode<4;mode=mode+1)
    begin
-
 	// -------------------------------
 	// Turn Off VGA before Mode Change
 
@@ -462,17 +470,17 @@ for(mode=0;mode<4;mode=mode+1)
 
 	s0.fill_mem(1);
 
-`ifdef USE_VC
-// Fill internal Color Lookup Table
-repeat(10)	@(posedge clk);
-for(n=0;n<512;n=n+1)
-   begin
-	//m0.wb_rd1( 32'h0002_0000 + (n*4), 4'hf, data );
-	data = s0.mem[ cbar[31:2] + n];
-	m0.wb_wr1( 32'h0000_0800 + (n*4), 4'hf, data );
-   end
-repeat(10)	@(posedge clk);
-`endif
+	`ifdef USE_VC
+	// Fill internal Color Lookup Table
+	repeat(10)	@(posedge clk);
+	for(n=0;n<512;n=n+1)
+	   begin
+	       //m0.wb_rd1( 32'h0002_0000 + (n*4), 4'hf, data );
+	       data = s0.mem[ cbar[31:2] + n];
+	       m0.wb_wr1( 32'h0000_0800 + (n*4), 4'hf, data );
+	   end
+	repeat(10)	@(posedge clk);
+	`endif
 
 	case(mode)
 	   0:
@@ -659,8 +667,8 @@ repeat(10)	@(posedge clk);
 
 		@(posedge pclk);
 
-	   end	
-   end
+	   end
+   end end
 
 show_errors;
 $display("*****************************************************");
@@ -679,14 +687,15 @@ integer		p, l;
 reg	[31:0]	pn;
 reg	[31:0]	pra, paa, tmp;
 reg	[23:0]	pd;
-reg	[1:0]	cd;
+reg	[ 1:0]	cd;
 reg		pc;
 reg	[31:0]	cbar;
 reg	[31:0]	vbase;
 reg	[31:0]	cbase;
 reg	[31:0]	vbara;
 reg	[31:0]	vbarb;
-reg	[7:0]	bank, vbl;
+reg	[ 7:0]	bank, vbl;
+reg	[ 5:0]	delay;
 
 begin
 
@@ -765,9 +774,13 @@ repeat(10)	@(posedge clk);
 `endif
 
 
-vbl = 3;
-mode = 1;
+vbl   = 3;
+mode  = 1;
+delay = 1;
 
+for(delay=0;delay<6;delay=delay+1)
+   begin
+	s0.set_delay(delay);
 for(vbl=0;vbl<4;vbl=vbl+1)
 for(mode=0;mode<=4;mode=mode+1)
    begin
@@ -835,7 +848,6 @@ for(bank=0;bank<2;bank=bank+1)
 
 	error_cnt=0;
 	// For Each Line
-//	for(l=0;l<tvgate+1;l=l+1)
 	for(l=0; l<tvgate;l=l+1)
 	// For each Pixel
 	for(p=0;p<thgate+1;p=p+1)
@@ -1002,9 +1014,9 @@ for(bank=0;bank<2;bank=bank+1)
 
 		@(posedge pclk);
 
-	   end	
+	   end
    end
-end
+end end
 
 show_errors;
 $display("*****************************************************");

@@ -52,73 +52,148 @@ parameter [2:0] cti_streaming = 3'b001;
 parameter [2:0] cti_inc_burst = 3'b010;
 parameter [2:0] cti_eob       = 3'b111;
 
-
 // check CTI, BTE
 reg [2:0] pcti; // previous cti
 reg [1:0] pbte; // previous bte
 reg       pwe;  // previous we
 reg       chk;
 
-always @(posedge clk_i)
-  if (cyc_i & stb_i & ack_i)
-    begin
-        pcti <= #1 cti_i;
-        pbte <= #1 bte_i;
-    end
+integer wb_b3_err;
+
+initial
+begin
+  chk = 0;
+  wb_b3_err = 0;
+
+  $display ("**********************************************");
+  $display ("**                                          **");
+  $display ("** WISBONE RevB.3 sanity check instantiated **");
+  $display ("** (C) 2003 Richard Herveille               **");
+  $display ("**                                          **");
+  $display ("**********************************************");
+end
 
 
 always @(posedge clk_i)
-  if (cyc_i)
-    if (ack_i)
-      chk <= #1 1'b1;
-  else
+  begin
+      pcti <= #1 cti_i;
+      pbte <= #1 bte_i;
+      pwe  <= #1 we_i;
+  end
+
+
+always @(posedge clk_i)
+  if (cyc_i) begin
+    chk <= #1 1'b1;
+  end else
     chk <= #1 1'b0;
+
 
 
 //
 // Check CTI_I
-always @(posedge clk_i)
-  if (chk)
-    case (cti_i)
-      cti_eob: ; // ok
+always @(cti_i)
+ if (chk)
+   if (cyc_i) begin
+     if (ack_i)
+       case (cti_i)
+          cti_eob: ; // ok
 
-      default:
-        if (cti_i !== pcti)
-          $display("\nWISHBONE revB.3 Burst error. CTI change from %0b to %0b not allowed. (%t)\n",
-                    pcti, cti_i, $time);
-    endcase
+          default:
+            if ( (cti_i !== pcti) && (pcti !== cti_eob) ) begin
+              $display("\nWISHBONE revB.3 Burst error. CTI change from %b to %b not allowed. (%t)\n",
+                        pcti, cti_i, $time);
+
+              wb_b3_err = wb_b3_err +1;
+            end
+       endcase
+     else
+       if ( (cti_i !== pcti) && (pcti !== cti_eob) ) begin
+         $display("\nWISHBONE revB.3 Burst error. Illegal CTI change during burst transfer. (%t)\n",
+                   $time);
+
+         wb_b3_err = wb_b3_err +1;
+       end
+   end else
+     case (pcti)
+        cti_classic: ; //ok
+        cti_eob: ;     // ok
+
+        default: begin
+          $display("\nWISHBONE revB.3 Burst error. Cycle negated without EOB (CTI=%b). (%t)\n",
+                    pcti, $time);
+
+          wb_b3_err = wb_b3_err +1;
+        end
+     endcase
 
 
 //
 // Check BTE_I
-always @(posedge clk_i)
-  if (chk)
-    if ((cti_i != cti_classic) && (bte_i !== pbte))
-      $display("\nWISHBONE revB.3 Burst ERROR. BTE change from %0b to %0b not allowed. (%t)\n",
-               pbte, bte_i, $time);
+always @(bte_i)
+ if (chk & cyc_i)
+   if (ack_i) begin
+     if ( (pcti !== cti_eob) && (bte_i !== pbte) ) begin
+        $display("\nWISHBONE revB.3 Burst ERROR. BTE change from %b to %b not allowed. (%t)\n",
+                  pbte, bte_i, $time);
 
+        wb_b3_err = wb_b3_err +1;
+     end
+   end else begin
+     $display("\nWISHBONE revB.3 Burst error. Illegal BTE change in burst cycle. (%t)\n",
+               $time);
+
+     wb_b3_err = wb_b3_err +1;
+   end
 
 //
 // Check WE_I
-always @(posedge clk_i)
-  if (chk)
-    if ((cti_i != cti_classic) && (we_i !== pwe))
-      $display("\nWISHBONE revB.3 Burst ERROR. WE change from %0b to %0b not allowed. (%t)\n",
-               pwe, we_i, $time);
+always @(we_i)
+ if (chk & cyc_i & stb_i)
+   if (ack_i) begin
+     if ( (pcti !== cti_eob) && (we_i !== pwe)) begin
+       $display("\nWISHBONE revB.3 Burst ERROR. WE change from %b to %b not allowed. (%t)\n",
+                 pwe, we_i, $time);
+
+       wb_b3_err = wb_b3_err +1;
+     end
+   end else begin
+     $display("\nWISHBONE revB.3 Burst error. Illegal WE change in burst cycle. (%t)\n",
+               $time);
+
+     wb_b3_err = wb_b3_err +1;
+   end
+
 
 
 //
 // Check ACK_I, ERR_I, RTY_I
 always @(posedge clk_i)
+if (cyc_i & stb_i)
   case ({ack_i, err_i, rty_i})
-    3'b000: ;
-    3'b001: ;
-    3'b010: ;
-    3'b100: ;
+     3'b000: ;
+     3'b001: ;
+     3'b010: ;
+     3'b100: ;
 
-    default:
-      $display("\n WISHBONE revB.3 ERROR. Either ack(%0b), rty(%0b), or err(%0b) may be asserted. (%t)",
+     default: begin
+        $display("\n WISHBONE revB.3 ERROR. Either ack(%0b), rty(%0b), or err(%0b) may be asserted. (%t)",
                ack_i, rty_i, err_i, $time);
+
+        wb_b3_err = wb_b3_err +1;
+     end
   endcase
 
+//
+// check errors
+always @(wb_b3_err)
+  if (chk && (wb_b3_err > 10) ) begin
+    $display ("**********************************************");
+    $display ("**                                          **");
+    $display ("** More than 10 WISBONE RevB.3 errors found **");
+    $display ("** Simulation stopped                       **");
+    $display ("**                                          **");
+    $display ("**********************************************");
+    $stop;
+  end
 endmodule

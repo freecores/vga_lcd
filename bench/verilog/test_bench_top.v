@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: test_bench_top.v,v 1.6 2003-03-19 17:22:19 rherveille Exp $
+//  $Id: test_bench_top.v,v 1.7 2003-05-07 09:45:28 rherveille Exp $
 //
-//  $Date: 2003-03-19 17:22:19 $
-//  $Revision: 1.6 $
+//  $Date: 2003-05-07 09:45:28 $
+//  $Revision: 1.7 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.6  2003/03/19 17:22:19  rherveille
+//               Added WISHBONE revB.3 sanity checks
+//
 //               Revision 1.5  2003/03/19 12:20:53  rherveille
 //               Changed timing section in VGA core, changed testbench accordingly.
 //               Fixed bug in 'timing check' test.
@@ -57,7 +60,7 @@
 //
 //
 //
-//                        
+//
 
 `timescale 1ns/10ps
 
@@ -65,7 +68,6 @@ module test;
 
 reg		clk;
 reg		rst;
-wire		clk_v;
 
 parameter	LINE_FIFO_AWIDTH = 7;
 
@@ -88,8 +90,10 @@ wire		wb_we_i;
 wire		wb_stb_i;
 wire		wb_cyc_i;
 wire		wb_ack_o;
+wire		wb_rty_o;
 wire		wb_err_o;
-reg		pclk;
+reg		pclk_i;
+wire		pclk;
 wire		hsync;
 wire		vsync;
 wire		csync;
@@ -97,6 +101,13 @@ wire		blanc;
 wire	[7:0]	red;
 wire	[7:0]	green;
 wire	[7:0]	blue;
+wire		dvi_pclk_p_o;
+wire		dvi_pclk_m_o;
+wire		dvi_hsync_o;
+wire		dvi_vsync_o;
+wire		dvi_de_o;
+wire	[11:0]	dvi_d_o;
+
 
 wire vga_stb_i;
 wire clut_stb_i;
@@ -114,7 +125,6 @@ reg		int_warn;
 
 integer		n;
 integer		mode;
-integer delay;
 
 reg	[7:0]	thsync, thgdel;
 reg	[15:0]	thgate, thlen;
@@ -138,7 +148,7 @@ reg	[7:0]	bank;
 
 /////////////////////////////////////////////////////////////////////
 //
-// Defines 
+// Defines
 //
 
 `define	CTRL		32'h0000_0000
@@ -174,7 +184,7 @@ initial
 	scen = 0;
 	error_cnt = 0;
    	clk = 0;
-	pclk = 0;
+	pclk_i = 0;
    	rst = 0;
 	int_warn=1;
 
@@ -191,19 +201,13 @@ if(0)	// Full Regression Run
 else
 if(1)	// Quick Regression Run
    begin
-	reg_test;
-	tim_test;
+//	reg_test;
+//	tim_test;
 
-	delay = 2;
-	for(delay = 0; delay < 3; delay = delay +1)
-	begin
-		$display("Setting wishbone slave delay to %d", delay);
-		s0.delay = delay;
-		pd1_test;
-		pd2_test;
-	end
+	pd1_test;
+	pd2_test;
 
-	//ur_test;
+//	ur_test;
    end
 else
    begin
@@ -218,7 +222,7 @@ $display("*****************************************************\n");
 
 	s0.fill_mem(1);
 
-   	repeat(10)	@(posedge clk);
+	repeat(10) @(posedge clk);
 
 	vbara = 32'h0000_0000;
 	vbarb = 32'h0001_0000;
@@ -469,7 +473,11 @@ $display("*****************************************************\n\n");
 // Sync Monitor
 //
 
+`ifdef VGA_12BIT_DVI
+sync_check #(PCLK_C*2) ucheck(
+`else
 sync_check #(PCLK_C) ucheck(
+`endif
 		.pclk(		pclk		),
 		.rst(		rst		),
 		.enable(	scen		),
@@ -506,7 +514,7 @@ wb_b3_check u_wb_check (
 	.stb_i ( wb_stb_o ),
 	.cti_i ( wb_cti_o ),
 	.bte_i ( wb_bte_o ),
-	.we_i  ( wb_we_i  ),
+	.we_i  ( wb_we_o  ),
 	.ack_i ( wb_ack_i ),
 	.err_i ( wb_err_i ),
 	.rty_i ( 1'b0     ) );
@@ -542,10 +550,8 @@ always @(posedge int)
 	$display("*************************************\n\n\n");
    end
 
-always #2.5		clk = ~clk;
-always #(PCLK_C/2)	pclk = ~pclk;
-
-assign clk_v = clk;
+always #2.5 clk = ~clk;
+always #(PCLK_C/2) pclk_i = ~pclk_i;
 
 /////////////////////////////////////////////////////////////////////
 //
@@ -556,43 +562,53 @@ assign clk_v = clk;
 // Module Prototype
 
 vga_enh_top #(1'b0, LINE_FIFO_AWIDTH) u0 (
-		.wb_clk_i    ( clk             ),
-		.wb_rst_i    ( 1'b0            ),
-		.rst_i       ( rst             ),
-		.wb_inta_o   ( int             ),
+		.wb_clk_i     ( clk             ),
+		.wb_rst_i     ( 1'b0            ),
+		.rst_i        ( rst             ),
+		.wb_inta_o    ( int             ),
 
 		//-- slave signals
-		.wbs_adr_i   ( wb_addr_i[11:0] ),
-		.wbs_dat_i   ( wb_data_i       ),
-		.wbs_dat_o   ( wb_data_o       ),
-		.wbs_sel_i   ( wb_sel_i        ),
-		.wbs_we_i    ( wb_we_i         ),
-		.wbs_stb_i   ( wb_stb_i        ),
-		.wbs_cyc_i   ( wb_cyc_i        ),
-		.wbs_ack_o   ( wb_ack_o        ),
-		.wbs_err_o   ( wb_err_o        ),
+		.wbs_adr_i    ( wb_addr_i[11:0] ),
+		.wbs_dat_i    ( wb_data_i       ),
+		.wbs_dat_o    ( wb_data_o       ),
+		.wbs_sel_i    ( wb_sel_i        ),
+		.wbs_we_i     ( wb_we_i         ),
+		.wbs_stb_i    ( wb_stb_i        ),
+		.wbs_cyc_i    ( wb_cyc_i        ),
+		.wbs_ack_o    ( wb_ack_o        ),
+		.wbs_rty_o    ( wb_rty_o        ),
+		.wbs_err_o    ( wb_err_o        ),
 
 		//-- master signals
-		.wbm_adr_o   ( wb_addr_o[31:0] ),
-		.wbm_dat_i   ( wbm_data_i      ),
-		.wbm_sel_o   ( wb_sel_o        ),
-		.wbm_we_o    ( wb_we_o         ),
-		.wbm_stb_o   ( wb_stb_o        ),
-		.wbm_cyc_o   ( wb_cyc_o        ),
-		.wbm_cti_o   ( ),
-		.wbm_bte_o   ( ),
-		.wbm_ack_i   ( wb_ack_i        ),
-		.wbm_err_i   ( wb_err_i        ),
+		.wbm_adr_o    ( wb_addr_o[31:0] ),
+		.wbm_dat_i    ( wbm_data_i      ),
+		.wbm_sel_o    ( wb_sel_o        ),
+		.wbm_we_o     ( wb_we_o         ),
+		.wbm_stb_o    ( wb_stb_o        ),
+		.wbm_cyc_o    ( wb_cyc_o        ),
+		.wbm_cti_o    ( wb_cti_o        ),
+		.wbm_bte_o    ( wb_bte_o        ),
+		.wbm_ack_i    ( wb_ack_i        ),
+		.wbm_err_i    ( wb_err_i        ),
 
 		//-- VGA signals
-		.clk_p_i     ( pclk            ),
-		.hsync_pad_o ( hsync           ),
-		.vsync_pad_o ( vsync           ),
-		.csync_pad_o ( csync           ),
-		.blank_pad_o ( blanc           ),
-		.r_pad_o     ( red             ),
-		.g_pad_o     ( green           ),
-		.b_pad_o     ( blue            )
+		.clk_p_i      ( pclk_i          ),
+	`ifdef VGA_12BIT_DVI
+		.dvi_pclk_p_o ( dvi_pclk_p_o    ),
+		.dvi_pclk_m_o ( dvi_pclk_m_o    ),
+		.dvi_hsync_o  ( dvi_hsync_o     ),
+		.dvi_vsync_o  ( dvi_vsync_o     ),
+		.dvi_de_o     ( dvi_de_o        ),
+		.dvi_d_o      ( dvi_d_o         ),
+	`endif
+		.clk_p_o      ( pclk            ),
+		.hsync_pad_o  ( hsync           ),
+		.vsync_pad_o  ( vsync           ),
+		.csync_pad_o  ( csync           ),
+		.blank_pad_o  ( blanc           ),
+		.r_pad_o      ( red             ),
+		.g_pad_o      ( green           ),
+		.b_pad_o      ( blue            )
 	);
 
 wb_mast	m0(	.clk(		clk		),
