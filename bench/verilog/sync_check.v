@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: sync_check.v,v 1.4 2003-05-07 09:45:28 rherveille Exp $
+//  $Id: sync_check.v,v 1.5 2003-09-23 13:09:25 markom Exp $
 //
-//  $Date: 2003-05-07 09:45:28 $
-//  $Revision: 1.4 $
-//  $Author: rherveille $
+//  $Date: 2003-09-23 13:09:25 $
+//  $Revision: 1.5 $
+//  $Author: markom $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.4  2003/05/07 09:45:28  rherveille
+//               Numerous updates and added checks
+//
 //               Revision 1.3  2003/03/19 12:20:53  rherveille
 //               Changed timing section in VGA core, changed testbench accordingly.
 //               Fixed bug in 'timing check' test.
@@ -174,6 +177,8 @@ always @(vsync)
 	   end
       end
 
+`ifdef VGA_12BIT_DVI
+`else
 // Verify BLANC Timing
 //assign bv_start = tvsync   + tvgdel + 2;
 //assign bv_end   = bv_start + tvgate + 2;
@@ -208,12 +213,7 @@ always @(posedge pclk)
 
 initial bval = 1;
 always @(bdel2)
-`ifdef VGA_12BIT_DVI
-	bval = !(bval1 & (bdel2 > bh_start) & (bdel2 < bh_end));
-`else
 	bval = #1 !(bval1 & (bdel2 > bh_start) & (bdel2 < bh_end));
-`endif
-
 
 always @(bval or blanc)
 	#0.01
@@ -228,13 +228,7 @@ always @(csync or vsync or hsync)
 	if( (csync ^ cpol) != ( (vsync ^ vpol) | (hsync ^ hpol) ) )
 		$display("CSYNC ERROR: Expected: %0d Got: %0d (%0t)",
 		( (vsync ^ vpol) | (hsync ^ hpol) ), (csync ^ cpol), $time);
-
+`endif
 
 endmodule
-
-
-
-
-
-
 

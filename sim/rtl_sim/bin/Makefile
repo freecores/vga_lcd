@@ -11,11 +11,13 @@ SHELL = /bin/sh
 DUT_SRC_DIR=../../../rtl/verilog
 _TARGETS_=	$(DUT_SRC_DIR)/generic_dpram.v		\
 		$(DUT_SRC_DIR)/generic_spram.v		\
+		$(DUT_SRC_DIR)/csm_spram_bw.v		\
 		$(DUT_SRC_DIR)/vga_colproc.v		\
 		$(DUT_SRC_DIR)/vga_csm_pb.v		\
 		$(DUT_SRC_DIR)/vga_cur_cregs.v		\
 		$(DUT_SRC_DIR)/vga_curproc.v		\
 		$(DUT_SRC_DIR)/vga_enh_top.v 		\
+		$(DUT_SRC_DIR)/vga_dvi_top.v 		\
 		$(DUT_SRC_DIR)/vga_fifo.v		\
 		$(DUT_SRC_DIR)/vga_fifo_dc.v		\
 		$(DUT_SRC_DIR)/vga_pgen.v		\
@@ -35,8 +37,15 @@ _TB_=		$(TB_SRC_DIR)/test_bench_top.v		\
 		$(TB_SRC_DIR)/wb_slv_model.v		\
 		$(TB_SRC_DIR)/wb_mast_model.v		\
 		$(TB_SRC_DIR)/sync_check.v		\
+		$(TB_SRC_DIR)/artsmcl18u_ram/art_hssp_512x24_bw_bist.v	\
+		$(TB_SRC_DIR)/artsmcl18u_ram/art_hsdp_128x24_bist.v	\
+		$(TB_SRC_DIR)/bist/rtl/verilog/bist_dp_top.v        \
+		$(TB_SRC_DIR)/bist/rtl/verilog/bist_sp_top.v        \
+		$(TB_SRC_DIR)/bist/rtl/verilog/bist_tp_top.v        \
+		$(TB_SRC_DIR)/bist/rtl/verilog/bist.v               \
+		$(TB_SRC_DIR)/artsmcl18u_ram/art_hssp_512x24_bw/art_hssp_512x24_bw.v	\
+		$(TB_SRC_DIR)/artsmcl18u_ram/art_hsdp_128x24/art_hsdp_128x24.v	\
 		$(TB_SRC_DIR)/wb_b3_check.v
-
 
 ##########################################################################
 #
@@ -113,8 +122,8 @@ hal:
 
 clean:
 	rm -rf	./waves/*.dsn ./waves/*.trn	\
-		ncwork/work/* ncwork/count/*	\
-		ncwork/work/.i* ncwork/count/.i* 
+		ncwork/worklib/* ncwork/count/*	\
+		ncwork/worklib/.i* ncwork/count/.i* 
 
 ##########################################################################
 #
@@ -124,7 +133,7 @@ clean:
 
 vlog:
 	ncvlog $(NCCOMMON) $(LOGF) 				\
-		-WORK work $(WAVES) $(TARGETS) $(TB) $(INCDIR)
+		-WORK worklib $(WAVES) $(TARGETS) $(TB) $(INCDIR)
 
 ##########################################################################
 #
@@ -134,8 +143,9 @@ vlog:
 
 elab:
 	ncelab	$(NCCOMMON) $(LOGF) -APPEND_LOG 		\
-		-WORK work $(ACCESS) 				\
-		work.$(TOP)
+		-WORK worklib $(ACCESS) 				\
+		-NOTIMINGCHECKS        \
+		worklib.$(TOP)
 
 ##########################################################################
 #
@@ -145,7 +155,7 @@ elab:
 
 ncsim:
 	ncsim	$(NCCOMMON) $(LOGF) -APPEND_LOG			\
-		-EXIT -ERRORMAX 10 work.$(TOP)
+		-EXIT -ERRORMAX 10 worklib.$(TOP)
 
 
 

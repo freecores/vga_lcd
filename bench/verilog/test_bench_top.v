@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: test_bench_top.v,v 1.9 2003-08-22 07:12:31 rherveille Exp $
+//  $Id: test_bench_top.v,v 1.10 2003-09-23 13:09:25 markom Exp $
 //
-//  $Date: 2003-08-22 07:12:31 $
-//  $Revision: 1.9 $
-//  $Author: rherveille $
+//  $Date: 2003-09-23 13:09:25 $
+//  $Revision: 1.10 $
+//  $Author: markom $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.9  2003/08/22 07:12:31  rherveille
+//               Enabled Fifo Underrun test
+//
 //               Revision 1.8  2003/05/07 14:39:19  rherveille
 //               Added DVI tests
 //
@@ -100,20 +103,21 @@ wire		wb_rty_o;
 wire		wb_err_o;
 reg		pclk_i;
 wire		pclk;
-wire		hsync;
+wire    	hsync;
 wire		vsync;
+wire    	ihsync;
+wire		ivsync;
 wire		csync;
 wire		blanc;
 wire	[7:0]	red;
 wire	[7:0]	green;
 wire	[7:0]	blue;
-wire		dvi_pclk_p_o;
-wire		dvi_pclk_m_o;
-wire		dvi_hsync_o;
-wire		dvi_vsync_o;
 wire		dvi_de_o;
+`ifdef VGA_12BIT_DVI
 wire	[11:0]	dvi_d_o;
-
+`else
+wire	[23:0]	dvi_d_o;
+`endif
 
 wire vga_stb_i;
 wire clut_stb_i;
@@ -167,11 +171,7 @@ reg	[7:0]	bank;
 
 `define USE_VC		1
 
-`ifdef VGA_12BIT_DVI
-parameter	PCLK_C = 20;
-`else
 parameter	PCLK_C = 30;
-`endif
 
 /////////////////////////////////////////////////////////////////////
 //
@@ -214,11 +214,13 @@ if(1)	// Quick Regression Run
 	reg_test;
 	tim_test;
 
+`ifdef VGA_24BIT_DVI
+	dvi_pd_test;
+`endif
+`ifdef VGA_12BIT_DVI
+`else
 	pd1_test;
 	pd2_test;
-
-`ifdef VGA_12BIT_DVI
-	dvi_pd_test;
 `endif
 
 	ur_test;
@@ -488,7 +490,7 @@ $display("*****************************************************\n\n");
 //
 
 `ifdef VGA_12BIT_DVI
-sync_check #(PCLK_C*2) ucheck(
+sync_check #(PCLK_C) ucheck(
 `else
 sync_check #(PCLK_C) ucheck(
 `endif
@@ -564,7 +566,7 @@ always @(posedge int)
 	$display("*************************************\n\n\n");
    end
 
-always #2.5 clk = ~clk;
+always #2.4 clk = ~clk;
 always #(PCLK_C/2) pclk_i = ~pclk_i;
 
 /////////////////////////////////////////////////////////////////////
@@ -575,7 +577,11 @@ always #(PCLK_C/2) pclk_i = ~pclk_i;
 
 // Module Prototype
 
+`ifdef VGA_12BIT_DVI
+vga_dvi_top #(1'b0, LINE_FIFO_AWIDTH) u0 (
+`else
 vga_enh_top #(1'b0, LINE_FIFO_AWIDTH) u0 (
+`endif
 		.wb_clk_i     ( clk             ),
 		.wb_rst_i     ( 1'b0            ),
 		.rst_i        ( rst             ),
@@ -606,24 +612,40 @@ vga_enh_top #(1'b0, LINE_FIFO_AWIDTH) u0 (
 		.wbm_err_i    ( wb_err_i        ),
 
 		//-- VGA signals
-		.clk_p_i      ( pclk_i          ),
-	`ifdef VGA_12BIT_DVI
-		.dvi_pclk_p_o ( dvi_pclk_p_o    ),
-		.dvi_pclk_m_o ( dvi_pclk_m_o    ),
-		.dvi_hsync_o  ( dvi_hsync_o     ),
-		.dvi_vsync_o  ( dvi_vsync_o     ),
-		.dvi_de_o     ( dvi_de_o        ),
-		.dvi_d_o      ( dvi_d_o         ),
+		.clk_p_i      ( pclk_i          )
+	`ifdef VGA_24BIT_DVI
+	      , .dvi_hsync_o  ( ihsync          ),
+		.dvi_vsync_o  ( ivsync          ),
+	        .dvi_de_o     ( dvi_de_o        ),
+		.dvi_d_o      ( dvi_d_o         )
 	`endif
-		.clk_p_o      ( pclk            ),
-		.hsync_pad_o  ( hsync           ),
+        `ifdef VGA_12BIT_DVI
+        `else
+              , .hsync_pad_o  ( hsync           ),
 		.vsync_pad_o  ( vsync           ),
 		.csync_pad_o  ( csync           ),
 		.blank_pad_o  ( blanc           ),
 		.r_pad_o      ( red             ),
 		.g_pad_o      ( green           ),
 		.b_pad_o      ( blue            )
+        `endif
+
+        `ifdef VGA_BIST
+                /* BIST signals */
+              , .scanb_rst(1'b1),
+                .scanb_clk(1'b0),
+                .scanb_si (1'b0),
+                .scanb_en (1'b0),
+                .scanb_so ()
+        `endif
 	);
+
+assign pclk = pclk_i;
+
+`ifdef VGA_12BIT_DVI
+assign hsync = !ihsync;
+assign vsync = !ivsync;
+`endif
 
 wb_mast	m0(	.clk(		clk		),
 		.rst(		rst		),

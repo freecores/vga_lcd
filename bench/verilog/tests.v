@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: tests.v,v 1.9 2003-08-22 07:17:21 rherveille Exp $
+//  $Id: tests.v,v 1.10 2003-09-23 13:09:25 markom Exp $
 //
-//  $Date: 2003-08-22 07:17:21 $
-//  $Revision: 1.9 $
-//  $Author: rherveille $
+//  $Date: 2003-09-23 13:09:25 $
+//  $Revision: 1.10 $
+//  $Author: markom $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.9  2003/08/22 07:17:21  rherveille
+//               Removed ctrl register's clut and vide bank switch from the register test. As they get reset automatically. This may result to erroneous errors.
+//
 //               Revision 1.8  2003/05/07 14:39:19  rherveille
 //               Added DVI tests
 //
@@ -1055,7 +1058,7 @@ $display("*****************************************************");
 $display("*** FIFO Underrun Test 1                          ***");
 $display("*****************************************************\n");
 
-	s0.delay=5;
+	s0.delay=15;
 	int_warn = 0;
 
 	m0.wb_wr1( `VBARA, 4'hf, 0 );
@@ -1082,7 +1085,7 @@ $display("*****************************************************\n");
 	m0.wb_wr1( `VTIM,  4'hf, {tvsync, tvgdel, tvgate} );
 	m0.wb_wr1( `HVLEN, 4'hf, {thlen, tvlen} );
 
-	mode = 2;
+	mode = 0;
 
 	// -------------------------------
 	// Turn Off VGA before Mode Change
@@ -1098,7 +1101,7 @@ for(n=0;n<512;n=n+1)
    begin
 	//m0.wb_rd1( 32'h0002_0000 + (n*4), 4'hf, data );
 	data = s0.mem[ cbar[31:2] + n];
-	m0.wb_wr1( 32'h8000_0000 + (n*4), 4'hf, data );
+	m0.wb_wr1( 32'h0000_0800 + (n*4), 4'hf, data );
    end
 repeat(10)	@(posedge clk);
 `endif
@@ -1340,7 +1343,7 @@ for(dvi_odf=0; dvi_odf<4;dvi_odf=dvi_odf +1)
 	// For each Pixel
 	for(p=0;p<thgate+1;p=p+1)
 	   begin
-		while(~dvi_de_o) @(pclk);  // wait for viewable data
+		while(dvi_de_o == 1'b0) @(pclk);  // wait for viewable data
 
 		//$display("pixel=%0d, line=%0d, (%0t)",p,l,$time);
 
@@ -1497,6 +1500,8 @@ for(dvi_odf=0; dvi_odf<4;dvi_odf=dvi_odf +1)
 		//
 		// verify pixel data
 
+`ifdef VGA_12BIT_DVI
+
 		// rising edge data
 		if (pda !== dvi_d_o)
 		   begin
@@ -1507,7 +1512,7 @@ for(dvi_odf=0; dvi_odf<4;dvi_odf=dvi_odf +1)
 			if(error_cnt > 10) $stop;
 		   end
 
-		@(dvi_pclk_p_o);
+		@(negedge pclk_i);
 
 		// falling edge data
 		if (pdb !== dvi_d_o)
@@ -1518,8 +1523,22 @@ for(dvi_odf=0; dvi_odf<4;dvi_odf=dvi_odf +1)
 			error_cnt = error_cnt + 1;
 			if(error_cnt > 10) $stop;
 		   end
+		@(posedge pclk_i);
+`else
 
-		@(dvi_pclk_p_o);
+		// compare data
+		if ({pdb, pda} !== dvi_d_o)
+		   begin
+			$display("ERROR: Pixel Data Mismatch: Expected: %h, Got: %h",
+				{pdb, pda}, dvi_d_o);
+			$display("       pixel=%0d, line=%0d, (%0t)",p,l,$time);
+			error_cnt = error_cnt + 1;
+			if(error_cnt > 10) $stop;
+		   end
+
+		@(negedge pclk_i);
+		@(posedge pclk_i);
+`endif
 	   end
    end
 

@@ -37,16 +37,22 @@
 
 //  CVS Log
 //
-//  $Id: wb_mast_model.v,v 1.1 2001-08-21 05:42:32 rudi Exp $
+//  $Id: wb_mast_model.v,v 1.2 2003-09-23 13:09:25 markom Exp $
 //
-//  $Date: 2001-08-21 05:42:32 $
-//  $Revision: 1.1 $
-//  $Author: rudi $
+//  $Date: 2003-09-23 13:09:25 $
+//  $Revision: 1.2 $
+//  $Author: markom $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.1  2001/08/21 05:42:32  rudi
+//
+//               - Changed Directory Structure
+//               - Added verilog Source Code
+//               - Changed IO pin names and defines statements
+//
 //
 //
 //                        
@@ -105,7 +111,6 @@ input	[3:0]	s;
 input	[31:0]	d;
 
 begin
-
 @(posedge clk);
 #1;
 adr = a;
