@@ -2,6 +2,7 @@
 -- File fifo.vhd (universal FIFO)
 -- Author : Richard Herveille
 -- rev.: 0.1 May 04th, 2001
+-- rev.: 0.2 June 16th, 2001 Changed "function bitcount" until it compiled under Xilinx Webpack
 --
 
 library ieee;
@@ -34,16 +35,39 @@ architecture structural of FIFO is
 	-- bitcount, return no.of bits required for 'n'
 	function bitcount(n : in natural) return natural is
 		variable tmp : unsigned(32 downto 1);
-		variable cnt : integer;
+		variable cnt, dummy : natural;
 	begin
 		tmp := conv_unsigned(n, 32);
-		cnt := 32;
 
-		while ( (tmp(cnt) = '0') and (cnt > 0) ) loop
-			cnt := cnt -1;
+-- "while..loop" is not supported by xilinx webpack yet
+--		cnt := 32;
+--		while ( (tmp(cnt) = '0') and (cnt > 0) ) loop
+--			cnt := cnt -1;
+--		end loop;
+
+	-- replaced "while..loop" with "loop..exit" for xilinx web-pack
+-- "loop" is not supported by xilinx webpack yet
+--		cnt := 32;
+--		loop
+--			exit when ( (tmp(cnt) /= '0') or (cnt = 0) );
+--			cnt := cnt -1;
+--		end loop;
+
+		-- same construction as above, now using for..loop
+-- "exit" statement not supported by xilinx webpack yet (what IS supported ?????)
+--		for cnt in 32 downto 1 loop
+--			exit when ( (tmp(cnt) /= '0') or (cnt = 0) );
+--		end loop;
+
+		-- yet another try
+		cnt := 32;
+		for dummy in 32 downto 1 loop
+			if (tmp(cnt) = '0') then
+				cnt := cnt -1;
+			end if;
 		end loop;
 
-		return natural(cnt);
+		return cnt;
 	end function bitcount;
 
 	constant ADEPTH : natural := bitcount(DEPTH -1); -- 256 entries: range 255 downto 0

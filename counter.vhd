@@ -6,6 +6,8 @@
 -- rev. 1.1 april 17th, 2001. Changed ro_cnt nld generation
 -- rev. 1.1 april 26th, 2001. Changed SYNCH_RCO (component ud_cnt) from string to bit. Fixed problems with Synplify
 -- rev. 1.2 may   11th, 2001. Fixed incomplete sensitivity list warning
+-- rev. 1.3 june  18th, 2001. Changed "end package count" to "end count" for Xilinx tools
+--
 
 
 library ieee;
@@ -55,7 +57,8 @@ package count is
 	);
 	end component ud_cnt;
 
-end package count;
+--end package count;
+end count;
 
 --
 -- run-once down-counter, counts D+1 cycles before generating 'DONE'
@@ -125,8 +128,8 @@ begin
 	-- hookup counter
 	cnt : ud_cnt 
 		generic map (SIZE => SIZE, SYNCH_RCO => '0')
-		port map (clk => clk, nReset => nReset, rst => rst, cnt_en => cnt_en, nld => nld, D => D, Q => Q, 
-			resD => ID, rci => rci, rco => rco);
+		port map (clk => clk, nReset => nReset, rst => rst, cnt_en => cnt_en, nld => nld, 
+			D => D, Q => Q, resD => ID, rci => rci, rco => rco);
 
 	done <= rco;
 end architecture structural;
