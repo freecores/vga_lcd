@@ -37,16 +37,21 @@
 
 //  CVS Log
 //
-//  $Id: vga_enh_top.v,v 1.4 2003-05-07 09:48:54 rherveille Exp $
+//  $Id: vga_enh_top.v,v 1.5 2003-07-03 15:09:06 rherveille Exp $
 //
-//  $Date: 2003-05-07 09:48:54 $
-//  $Revision: 1.4 $
+//  $Date: 2003-07-03 15:09:06 $
+//  $Revision: 1.5 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.4  2003/05/07 09:48:54  rherveille
+//               Fixed some Wishbone RevB.3 related bugs.
+//               Changed layout of the core. Blocks are located more logically now.
+//               Started work on a dual clocked/double edge 12bit output. Commonly used by external devices like DVI transmitters.
+//
 //               Revision 1.3  2003/03/18 21:45:48  rherveille
 //               Added WISHBONE revB.3 Registered Feedback Cycles support
 //
@@ -414,7 +419,7 @@ module vga_enh_top (
 	always @(posedge clk_p_i)
 	  luint_pclk <= #1 line_fifo_rreq & line_fifo_empty_rd;
 
-	always @(posedge wb_clk_i or negedge arst)
+	always @(posedge wb_clk_i)
 	  if (!ctrl_ven)
 	    begin
 	        sluint <= #1 1'b0;
