@@ -37,16 +37,22 @@
 
 //  CVS Log
 //
-//  $Id: vga_wb_slave.v,v 1.6 2002-02-07 05:42:10 rherveille Exp $
+//  $Id: vga_wb_slave.v,v 1.7 2002-02-25 06:13:44 rherveille Exp $
 //
-//  $Date: 2002-02-07 05:42:10 $
-//  $Revision: 1.6 $
+//  $Date: 2002-02-25 06:13:44 $
+//  $Revision: 1.7 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.6  2002/02/07 05:42:10  rherveille
+//               Fixed some bugs discovered by modified testbench
+//               Removed / Changed some strange logic constructions
+//               Started work on hardware cursor support (not finished yet)
+//               Changed top-level name to vga_enh_top.v
+//
 
 
 `include "timescale.v"
@@ -195,19 +201,27 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 	begin : gen_regs
 		if(!nRESET)
 			begin
-				htim  <= #1 0;
-				vtim  <= #1 0;
-				hvlen <= #1 0;
-				VBARa <= #1 0;
-				VBARb <= #1 0;
+				htim       <= #1 0;
+				vtim       <= #1 0;
+				hvlen      <= #1 0;
+				VBARa      <= #1 0;
+				VBARb      <= #1 0;
+				cursor0_xy <= #1 0;
+				cursor0_ba <= #1 0;
+				cursor1_xy <= #1 0;
+				cursor1_ba <= #1 0;
 			end
 		else if (RST_I)
 			begin
-				htim  <= #1 0;
-				vtim  <= #1 0;
-				hvlen <= #1 0;
-				VBARa <= #1 0;
-				VBARb <= #1 0;
+				htim       <= #1 0;
+				vtim       <= #1 0;
+				hvlen      <= #1 0;
+				VBARa      <= #1 0;
+				VBARb      <= #1 0;
+				cursor0_xy <= #1 0;
+				cursor0_ba <= #1 0;
+				cursor1_xy <= #1 0;
+				cursor1_ba <= #1 0;
 			end
 		else if (reg_wacc)
 			case (ADR_I)	// synopsis full_case parallel_case
@@ -327,7 +341,8 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 
 	
 	// assign output
-	always@(REG_ADR or ctrl or stat or htim or vtim or hvlen or VBARa or VBARb or acmp)
+	always@(REG_ADR or ctrl or stat or htim or vtim or hvlen or VBARa or VBARb or acmp or
+		cursor0_xy or cursor0_ba or cursor1_xy or cursor1_ba)
 	case (REG_ADR) // synopsis full_case parallel_case
 		CTRL_ADR  : reg_dato = ctrl;
 		STAT_ADR  : reg_dato = stat;
