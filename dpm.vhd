@@ -63,8 +63,7 @@ begin
 	--
 	-- Change the next section(s) for target specific RAM blocks.
 	-- The functionality as described below must be maintained! Some target specific RAM blocks have an asychronous output. 
-	-- Insert flip-flops at the output in this case (see below)
-
+	-- Insert registers at the output if necessary
 	--
 	-- generic dual ported memory description
 	--

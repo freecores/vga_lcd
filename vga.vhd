@@ -3,7 +3,8 @@
 -- project: VGA/LCD controller
 -- author: Richard Herveille
 --
---
+-- rev 1.0 may 10th 2001
+-- rev 1.1 june 3th 2001. Changed WISHBONE addresses. Addresses are byte oriented, instead of databus-independent
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -17,7 +18,7 @@ entity VGA is
 		INTA_O : out std_logic;
 
 		-- slave signals
-		ADR_I : in unsigned(2 downto 0);
+		ADR_I : in unsigned(4 downto 2);                          -- only 32bit databus accesses supported
 		SDAT_I : in std_logic_vector(31 downto 0);
 		SDAT_O : out std_logic_vector(31 downto 0);
 		SEL_I : in std_logic_vector(3 downto 0);
@@ -28,7 +29,7 @@ entity VGA is
 		ERR_O : out std_logic;
 		
 		-- master signals
-		ADR_O : out unsigned(31 downto 0);
+		ADR_O : out unsigned(31 downto 2);
 		MDAT_I : in std_logic_vector(31 downto 0);
 		SEL_O : out std_logic_vector(3 downto 0);
 		WE_O : out std_logic;
@@ -64,10 +65,10 @@ architecture dataflow of vga is
 		wclk : in std_logic;                          -- write clock input
 		aclr : in std_logic := '1';                   -- active low asynchronous clear
 
-		D : in std_logic_vector(DWIDTH -1 downto 0);   -- Data input
+		D : in std_logic_vector(DWIDTH -1 downto 0);  -- Data input
 		wreq : in std_logic;                          -- write request
 
-		Q : out std_logic_vector(DWIDTH -1 downto 0);  -- Data output
+		Q : out std_logic_vector(DWIDTH -1 downto 0); -- Data output
 		rreq : in std_logic;                          -- read request
 		
 		rd_empty,                                     -- FIFO is empty, synchronous to read clock
@@ -83,7 +84,7 @@ architecture dataflow of vga is
 		CLK_I : in std_logic;
 		RST_I : in std_logic;
 		NRESET : in std_logic;
-		ADR_I : in unsigned(2 downto 0);
+		ADR_I : in unsigned(4 downto 2);
 		DAT_I : in std_logic_vector(31 downto 0);
 		DAT_O : out std_logic_vector(31 downto 0);
 		SEL_I : in std_logic_vector(3 downto 0);
@@ -129,7 +130,7 @@ architecture dataflow of vga is
 
 		VBARa,
 		VBARb,
-		CBAR : buffer unsigned(31 downto 0)
+		CBAR : buffer unsigned(31 downto 2)
 	);
 	end component wb_slave;
 
@@ -144,7 +145,7 @@ architecture dataflow of vga is
 		STB_O : out std_logic;                       -- strobe output
 		CAB_O : out std_logic;                       -- Consecutive Address Burst output
 		WE_O  : out std_logic;                       -- write enable output
-		ADR_O : out unsigned(31 downto 0);           -- address output
+		ADR_O : out unsigned(31 downto 2);           -- address output
 		SEL_O : out std_logic_vector(3 downto 0);    -- Byte Select outputs (only 32bit accesses are supported)
 		ACK_I : in std_logic;                        -- WISHBONE cycle acknowledge signal
 		ERR_I : in std_logic;                        -- oops, bus-error
@@ -161,8 +162,8 @@ architecture dataflow of vga is
 
 		-- video memory addresses
 		VBAa,                                        -- Video Memory Base Address-A
-		VBAb : in unsigned(31 downto 0);             -- Video Memory Base Address-B
-		CBA : in unsigned(31 downto 0);              -- CLUT Base Address Register
+		VBAb : in unsigned(31 downto 2);             -- Video Memory Base Address-B
+		CBA : in unsigned(31 downto 2);              -- CLUT Base Address Register
 
 		Thgate : unsigned(15 downto 0);              -- horizontal visible area (in pixels)
 		Tvgate : unsigned(15 downto 0);              -- vertical visible area (in horizontal lines)
@@ -224,7 +225,7 @@ architecture dataflow of vga is
 	signal ctrl_cd, ctrl_vbl : std_logic_vector(1 downto 0);
 	signal Thsync, Thgdel, Tvsync, Tvgdel : unsigned(7 downto 0);
 	signal Thgate, Thlen, Tvgate, Tvlen : unsigned(15 downto 0);
-	signal VBARa, VBARb, CBAR : unsigned(31 downto 0);
+	signal VBARa, VBARb, CBAR : unsigned(31 downto 2);
 
 	-- to wb_slave
 	signal stat_amp, bsint, hint, vint, luint, sint : std_logic;
@@ -314,6 +315,5 @@ begin
 	end block luint_blk;
 
 end architecture dataflow;
-
 
 

@@ -2,8 +2,10 @@
 -- file: wb_slave.vhd
 -- project: VGA/LCD controller
 -- author: Richard Herveille
--- rev.0.1 may 10th 2001
+-- rev 1.0 may 10th 2001
+-- rev 1.1 june 3rd 2001. Changed WISHBONE ADR_I. Addresses are defined as byte-oriented, instead of databus independent.
 --
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.std_logic_arith.all;
@@ -13,7 +15,7 @@ entity wb_slave is
 		CLK_I : in std_logic;
 		RST_I : in std_logic;
 		NRESET : in std_logic;
-		ADR_I : in unsigned(2 downto 0);
+		ADR_I : in unsigned(4 downto 2);
 		DAT_I : in std_logic_vector(31 downto 0);
 		DAT_O : out std_logic_vector(31 downto 0);
 		SEL_I : in std_logic_vector(3 downto 0);
@@ -57,7 +59,7 @@ entity wb_slave is
 
 		VBARa,
 		VBARb,
-		CBAR : buffer unsigned(31 downto 0)
+		CBAR : buffer unsigned(31 downto 2)
 );
 end entity wb_slave;
 
@@ -99,9 +101,9 @@ begin
 					when "010" => htim <= DAT_I;
 					when "011" => vtim <= DAT_I;
 					when "100" => hvlen <= DAT_I;
-					when "101" => VBARa <= unsigned(DAT_I);
-					when "110" => VBARb <= unsigned(DAT_I);
-					when "111" => CBAR <= unsigned(DAT_I);
+					when "101" => VBARa <= unsigned(DAT_I(31 downto 2));
+					when "110" => VBARb <= unsigned(DAT_I(31 downto 2));
+					when "111" => CBAR <= (unsigned(DAT_I(31 downto 10)) & "00000000");
 
 					when others => null; -- should never happen
 				end case;
@@ -169,10 +171,11 @@ begin
 		         htim  when "010",
 		         vtim  when "011",
 		         hvlen when "100",
-		         std_logic_vector(VBARa) when "101",
-		         std_logic_vector(VBARb) when "110",
-		         std_logic_vector(CBAR)  when others;
+		         std_logic_vector(VBARa & "00") when "101",
+		         std_logic_vector(VBARb & "00") when "110",
+		         std_logic_vector(CBAR & "00")  when others;
 
 	-- generate interrupt request signal
 	INTA_O <= (HINT and HIE) or (VINT and VIE) or (BSINT and BSIE) or LUINT or SINT;
 end architecture structural;
+

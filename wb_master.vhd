@@ -2,8 +2,8 @@
 -- File wb_master.vhd, WISHBONE MASTER interface (video-memory/clut memory)
 -- Project: VGA
 -- Author : Richard Herveille
--- rev.: 0.1 May 1st, 2001
---
+-- rev.: 1.0 May 1st, 2001
+-- rev.: 1.1 June 3rd, 2001. Changed address related sections.
 --
 --
 
@@ -21,7 +21,7 @@ entity wb_master is
 		STB_O : out std_logic;                       -- strobe output
 		CAB_O : out std_logic;                       -- Consecutive Address Burst output
 		WE_O  : out std_logic;                       -- write enable output
-		ADR_O : out unsigned(31 downto 0);           -- address output
+		ADR_O : out unsigned(31 downto 2);           -- address output
 		SEL_O : out std_logic_vector(3 downto 0);    -- Byte Select outputs (only 32bit accesses are supported)
 		ACK_I : in std_logic;                        -- WISHBONE cycle acknowledge signal
 		ERR_I : in std_logic;                        -- oops, bus-error
@@ -38,8 +38,8 @@ entity wb_master is
 
 		-- video memory addresses
 		VBAa,                                        -- Video Memory Base Address-A
-		VBAb : in unsigned(31 downto 0);             -- Video Memory Base Address-B
-		CBA : in unsigned(31 downto 0);              -- CLUT Base Address Register
+		VBAb : in unsigned(31 downto 2);             -- Video Memory Base Address-B
+		CBA : in unsigned(31 downto 2);              -- CLUT Base Address Register
 
 		Thgate : unsigned(15 downto 0);              -- horizontal visible area (in pixels)
 		Tvgate : unsigned(15 downto 0);              -- vertical visible area (in horizontal lines)
@@ -112,7 +112,7 @@ architecture structural of wb_master is
 	signal clut_req, clut_ack : std_logic;                                   -- clut access request // clut access acknowledge
 	signal clut_offs : unsigned(7 downto 0);                                 -- clut memory offset
 	signal nvmem_req, vmem_ack : std_logic;                                  -- NOT video memory access request // video memory access acknowledge
-	signal vmem_offs : unsigned(31 downto 0);                                -- video memory offset
+	signal vmem_offs : unsigned(31 downto 2);                                -- video memory offset
 	signal bl : unsigned(3 downto 0);
 	signal pixelbuf_rreq, pixelbuf_empty : std_logic;
 	signal pixelbuf_q : std_logic_vector(31 downto 0);
@@ -128,7 +128,7 @@ begin
 		signal burst_cnt : unsigned(2 downto 0);               -- video memory burst access counter
 		signal ImDone, dImDone, burst_done : std_logic;        -- Done reading image from video mem // delayed ImDone // completed burst access to video mem
 		signal sel_VBA : std_logic;                            -- select video memory base address
-		signal vmemA, clutA : unsigned(31 downto 0);           -- video memory address // clut address
+		signal vmemA, clutA : unsigned(31 downto 2);           -- video memory address // clut address
 		signal HPix : unsigned(15 downto 0);                   -- number of horizontal pixels (Thgate +1)
 		signal TotPix, PixCnt : unsigned(31 downto 0);         -- total amount of pixels (horizontal pixels * vertical lines) // PixelCounter
 	begin
@@ -239,7 +239,7 @@ begin
 			end if;
 
 			-- calculate CLUT address
-			clutA <= (CBA(31 downto 8) & clut_offs);
+			clutA <= (CBA(31 downto 10) & clut_offs);
 		end process addr;
 
 		-- generate wishbone signals
@@ -321,9 +321,4 @@ begin
 	end process gen_lfifo_wreq;
 	line_fifo_wreq <= RGBbuf_rreq;
 
---	line_fifo: FIFO_DC generic map (DEPTH => 16, WIDTH => 24)
---		port map (rclk => pclk, wclk => CLK_I, aclr => ctrl_Ven, D => RGBbuf_q, wreq => line_fifo_wreq, 
---						Q => RGB, rreq => cgate, wr_full => line_fifo_full);
 end architecture structural;
-
-
