@@ -37,16 +37,22 @@
 
 //  CVS Log
 //
-//  $Id: vga_wb_master.v,v 1.6 2002-02-07 05:42:10 rherveille Exp $
+//  $Id: vga_wb_master.v,v 1.7 2002-02-16 10:40:00 rherveille Exp $
 //
-//  $Date: 2002-02-07 05:42:10 $
-//  $Revision: 1.6 $
+//  $Date: 2002-02-16 10:40:00 $
+//  $Revision: 1.7 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.6  2002/02/07 05:42:10  rherveille
+//               Fixed some bugs discovered by modified testbench
+//               Removed / Changed some strange logic constructions
+//               Started work on hardware cursor support (not finished yet)
+//               Changed top-level name to vga_enh_top.v
+//
 
 `include "timescale.v"
 `include "vga_defines.v"
@@ -141,7 +147,6 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 	wire rgb_fifo_empty, rgb_fifo_full, rgb_fifo_rreq;
 	wire ImDoneFifoQ;
 	reg  dImDoneFifoQ, ddImDoneFifoQ;
-	reg  [2:0] ImDoneCursorQ;
 
 	reg sclr; // synchronous clear
 
@@ -413,19 +418,11 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 	);
 
 	// hookup data-source-selector && hardware cursor module
-`ifdef VGA_HWC1
+`ifdef VGA_HWC1	// generate Hardware Cursor1 (if enabled)
 	reg scursor1_ld;
 	reg scursor1_en;
 	reg [31:0] scursor1_xy;
-	reg sddImDoneFifoQ, sdImDoneFifoQ;
 
-	always@(posedge clk_i)
-		if (ssel1_wreq)
-			begin
-				sdImDoneFifoQ  <= #1 dImDoneFifoQ;
-				sddImDoneFifoQ <= #1 sdImDoneFifoQ;
-			end
-		
 	always@(posedge clk_i)
 		if (sclr)
 			scursor1_ld <= #1 1'b0;
@@ -442,7 +439,7 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 		if (scursor1_ld)
 			scursor1_xy <= #1 cursor1_xy;
 
-	vga_ssel ssel_and_hw_cursor1 (
+	vga_curproc hw_cursor1 (
 		.clk(clk_i),
 		.rst_i(sclr),
 		.Thgate(Thgate),
@@ -457,17 +454,34 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 		.rgb_fifo_wreq(ssel1_wreq),
 		.rgb(ssel1_q)
 	);
-`else
-	wire sddImDoneFifoQ, sdImDoneFifoQ;
+
+`ifdef VGA_HWC0	// generate additional signals for Hardware Cursor0 (if enabled)
+	reg sddImDoneFifoQ, sdImDoneFifoQ;
+
+	always@(posedge clk_i)
+		if (ssel1_wreq)
+			begin
+				sdImDoneFifoQ  <= #1 dImDoneFifoQ;
+				sddImDoneFifoQ <= #1 sdImDoneFifoQ;
+			end
+`endif
+
+`else			// Hardware Cursor1 disabled, generate pass-through signals
 
 	assign ssel1_wreq = color_proc_wreq;
 	assign ssel1_q    = color_proc_q;
+
+`ifdef VGA_HWC0	// generate additional signals for Hardware Cursor0 (if enabled)
+	wire sddImDoneFifoQ, sdImDoneFifoQ;
 
 	assign sdImDoneFifoQ  = dImDoneFifoQ;
 	assign sddImDoneFifoQ = ddImDoneFifoQ;
 `endif
 
-`ifdef VGA_HWC0
+`endif
+
+
+`ifdef VGA_HWC0	// generate Hardware Cursor0 (if enabled)
 	reg scursor0_ld;
 	reg scursor0_en;
 	reg [31:0] scursor0_xy;
@@ -488,7 +502,7 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 		if (scursor0_ld)
 			scursor0_xy <= #1 cursor0_xy;
 
-	vga_ssel ssel_and_hw_cursor0 (
+	vga_curproc hw_cursor0 (
 		.clk(clk_i),
 		.rst_i(sclr),
 		.Thgate(Thgate),
@@ -503,7 +517,7 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 		.rgb_fifo_wreq(rgb_fifo_wreq),
 		.rgb(rgb_fifo_d)
 	);
-`else
+`else	// Hardware Cursor0 disabled, generate pass-through signals
 	assign rgb_fifo_wreq = ssel1_wreq;
 	assign rgb_fifo_d = ssel1_q;
 `endif

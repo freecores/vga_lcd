@@ -1,7 +1,7 @@
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
 ////  WISHBONE rev.B2 compliant enhanced VGA/LCD Core            ////
-////  Video source selector / Hardware cursor block              ////
+////  Hardware Cursor Processor                                  ////
 ////                                                             ////
 ////  Author: Richard Herveille                                  ////
 ////          richard@asics.ws                                   ////
@@ -37,9 +37,9 @@
 
 //  CVS Log
 //
-//  $Id: vga_ssel.v,v 1.1 2002-02-07 05:42:10 rherveille Exp $
+//  $Id: vga_curproc.v,v 1.1 2002-02-16 10:40:00 rherveille Exp $
 //
-//  $Date: 2002-02-07 05:42:10 $
+//  $Date: 2002-02-16 10:40:00 $
 //  $Revision: 1.1 $
 //  $Author: rherveille $
 //  $Locker:  $
@@ -47,10 +47,16 @@
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.1  2002/02/07 05:42:10  rherveille
+//               Fixed some bugs discovered by modified testbench
+//               Removed / Changed some strange logic constructions
+//               Started work on hardware cursor support (not finished yet)
+//               Changed top-level name to vga_enh_top.v
+//
 
 `include "timescale.v"
 
-module vga_ssel (clk, rst_i, Thgate, Tvgate, idat, idat_wreq, 
+module vga_curproc (clk, rst_i, Thgate, Tvgate, idat, idat_wreq, 
 	cursor_xy, cursor_en, cursor_adr, cursor_dat, cursor_we,
 	rgb_fifo_wreq, rgb);
 
@@ -197,3 +203,4 @@ module vga_ssel (clk, rst_i, Thgate, Tvgate, idat, idat_wreq,
 			cmem_ra <= #1 cmem_ra +10'h1;
 
 endmodule
+
