@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: vga_enh_top.v,v 1.2 2002-03-04 11:01:59 rherveille Exp $
+//  $Id: vga_enh_top.v,v 1.3 2003-03-18 21:45:48 rherveille Exp $
 //
-//  $Date: 2002-03-04 11:01:59 $
-//  $Revision: 1.2 $
+//  $Date: 2003-03-18 21:45:48 $
+//  $Revision: 1.3 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.2  2002/03/04 11:01:59  rherveille
+//               Added 64x64pixels 4bpp hardware cursor support.
+//
 //               Revision 1.1  2002/02/07 05:42:10  rherveille
 //               Fixed some bugs discovered by modified testbench
 //               Removed / Changed some strange logic constructions
@@ -58,9 +61,10 @@
 `include "vga_defines.v"
 
 module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o, 
-		wbs_adr_i, wbs_dat_i, wbs_dat_o, wbs_sel_i, wbs_we_i, wbs_stb_i, wbs_cyc_i, wbs_ack_o, wbs_err_o, 
-		wbm_adr_o,	wbm_dat_i, wbm_cab_o,  wbm_sel_o, wbm_we_o, wbm_stb_o, wbm_cyc_o, wbm_ack_i, wbm_err_i,
-		clk_p_i, hsync_pad_o, vsync_pad_o, csync_pad_o, blank_pad_o, r_pad_o, g_pad_o, b_pad_o);
+	wbs_adr_i, wbs_dat_i, wbs_dat_o, wbs_sel_i, wbs_we_i, wbs_stb_i, wbs_cyc_i, wbs_ack_o, wbs_err_o,
+	wbm_adr_o, wbm_dat_i, wbm_cti_o, wbm_bte_o, wbm_sel_o, wbm_we_o, wbm_stb_o, wbm_cyc_o, wbm_ack_i, wbm_err_i,
+	clk_p_i, hsync_pad_o, vsync_pad_o, csync_pad_o, blank_pad_o, r_pad_o, g_pad_o, b_pad_o
+	);
 
 	//
 	// parameters
@@ -96,7 +100,8 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 	output        wbm_we_o;      // write enable output
 	output        wbm_stb_o;     // strobe output
 	output        wbm_cyc_o;     // valid bus cycle output
-	output        wbm_cab_o;     // continuos address burst output
+	output [ 3:0] wbm_cti_o;     // cycle type identifier
+	output [ 1:0] wbm_bte_o;     // burst type extensions
 	input         wbm_ack_i;     // bus cycle acknowledge input
 	input         wbm_err_i;     // bus cycle error input
 
@@ -142,7 +147,7 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 	wire ihsync, ivsync, icsync, iblank; // intermediate horizontal/vertical/composite sync, intermediate blank
 
 	// line fifo connections
-	wire line_fifo_dpm_wreq;
+	wire line_fifo_dpm_wreq, line_fifo_empty_rd;
 	wire [23:0] line_fifo_dpm_d, line_fifo_dpm_q;
 
 	// clut connections
@@ -157,7 +162,7 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 	//
 
 	// hookup wishbone slave
-	vga_wb_slave u1 (
+	vga_wb_slave wbs (
 		// wishbone interface
 		.clk_i(wb_clk_i),
 		.rst_i(wb_rst_i),
@@ -205,7 +210,7 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 		.hint_in(hint),             // horizontal interrupt
 		.vint_in(vint),             // vertical interrupt
 		.luint_in(luint),           // line fifo underrun interrupt
-		.sint_in(sint),             // system-error interrupt 
+		.sint_in(sint),             // system-error interrupt
 		.Thsync(Thsync),
 		.Thgdel(Thgdel),
 		.Thgate(Thgate),
@@ -222,14 +227,15 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 	);
 
 	// hookup wishbone master
-	vga_wb_master u2 (
+	vga_wb_master wbm (
 		// wishbone interface
 		.clk_i(wb_clk_i),
 		.rst_i(wb_rst_i),
 		.nrst_i(arst),
 		.cyc_o(wbm_cyc_o),
 		.stb_o(wbm_stb_o),
-		.cab_o(wbm_cab_o),
+		.cti_o(wbm_cti_o),
+		.bte_o(wbm_bte_o),
 		.we_o(wbm_we_o),
 		.adr_o(wbm_adr_o),
 		.sel_o(wbm_sel_o),
@@ -302,7 +308,7 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 	);
 
 	// hookup pixel and video timing generator
-	vga_pgen u3 (
+	vga_pgen pixel_generator (
 		.mclk(wb_clk_i),
 		.pclk(clk_p_i),
 		.ctrl_ven(ctrl_ven),
@@ -329,16 +335,16 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 
 
 	// delay video control signals 1 clock cycle (dual clock fifo synchronizes output)
-	always@(posedge clk_p_i)
+	always @(posedge clk_p_i)
 	begin
-		hsync_pad_o <= #1 ihsync;
-		vsync_pad_o <= #1 ivsync;
-		csync_pad_o <= #1 icsync;
-		blank_pad_o <= #1 iblank;
+	    hsync_pad_o <= #1 ihsync;
+	    vsync_pad_o <= #1 ivsync;
+	    csync_pad_o <= #1 icsync;
+	    blank_pad_o <= #1 iblank;
 	end
 
 	// hookup line-fifo
-	vga_fifo_dc #(LINE_FIFO_AWIDTH, 24) u4 (
+	vga_fifo_dc #(LINE_FIFO_AWIDTH, 24) line_fifo (
 		.rclk(clk_p_i),
 		.wclk(wb_clk_i),
 		.aclr(ctrl_ven),
@@ -359,30 +365,30 @@ module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 	// generate interrupt signal when reading line-fifo while it is empty (line-fifo under-run interrupt)
 	reg luint_pclk, sluint;
 
-	always@(posedge clk_p_i)
-		luint_pclk <= #1 cgate & line_fifo_empty_rd;
+	always @(posedge clk_p_i)
+	  luint_pclk <= #1 cgate & line_fifo_empty_rd;
 
-	always@(posedge wb_clk_i or negedge arst)
-		if (!arst)
-			begin
-				sluint <= #1 1'b0;
-				luint  <= #1 1'b0;
-			end
-		else if (wb_rst_i)
-			begin
-				sluint <= #1 1'b0;
-				luint  <= #1 1'b0;
-			end
-		else if (!ctrl_ven)
-			begin
-				sluint <= #1 1'b0;
-				luint  <= #1 1'b0;
-			end
-		else
-			begin
-				sluint <= #1 luint_pclk;	// resample at wb_clk_i clock
-				luint  <= #1 sluint;     // sample again, reduce metastability risk
-			end
+	always @(posedge wb_clk_i or negedge arst)
+	  if (!arst)
+	    begin
+	        sluint <= #1 1'b0;
+	        luint  <= #1 1'b0;
+	    end
+	  else if (wb_rst_i)
+	    begin
+	        sluint <= #1 1'b0;
+	        luint  <= #1 1'b0;
+	    end
+	  else if (!ctrl_ven)
+	    begin
+	        sluint <= #1 1'b0;
+	        luint  <= #1 1'b0;
+	    end
+	  else
+	    begin
+	        sluint <= #1 luint_pclk;  // resample at wb_clk_i clock
+	        luint  <= #1 sluint;      // sample again, reduce metastability risk
+	    end
 
 endmodule
 

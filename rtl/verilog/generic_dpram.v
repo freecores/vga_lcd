@@ -66,6 +66,23 @@
 // CVS Revision History
 //
 // $Log: not supported by cvs2svn $
+// Revision 1.4  2002/09/28 08:18:52  rherveille
+// Changed synthesizeable FPGA memory implementation.
+// Fixed some issues with Xilinx BlockRAM
+//
+// Revision 1.3  2001/11/09 00:34:18  samg
+// minor changes: unified with all common rams
+//
+// Revision 1.2  2001/11/08 19:11:31  samg
+// added valid checks to behvioral model
+//
+// Revision 1.1.1.1  2001/09/14 09:57:10  rherveille
+// Major cleanup.
+// Files are now compliant to Altera & Xilinx memories.
+// Memories are now compatible, i.e. drop-in replacements.
+// Added synthesizeable generic FPGA description.
+// Created "generic_memories" cvs entry.
+//
 // Revision 1.1.1.2  2001/08/21 13:09:27  damjan
 // *** empty log message ***
 //
@@ -80,9 +97,11 @@
 //
 //
 
+//synopsys translate_off
 `include "timescale.v"
+//synopsys translate_on
 
-//`define VENDOR_FPGA
+`define VENDOR_FPGA
 //`define VENDOR_XILINX
 //`define VENDOR_ALTERA
 
@@ -129,22 +148,22 @@ module generic_dpram(
 	// The code correctly instantiates Altera EABs and Xilinx BlockRAMs.
 	//
 
-	reg [dw-1 :0] mem [(1<<aw) -1:0]; // instantiate memory
-	reg [dw-1:0] do;                  // data output registers
+	// NOTE:
+	// 'synthesis syn_ramstyle="block_ram"' is a Synplify attribute.
+	// It instructs Synplify to map to BlockRAMs instead of the default SelectRAMs
+
+	reg [dw-1:0] mem [(1<<aw) -1:0] /* synthesis syn_ramstyle="block_ram" */;
+	reg [aw-1:0] ra;                // register read address
 
 	// read operation
+	always @(posedge rclk)
+	  if (rce)
+	    ra <= #1 raddr;
 
-	/*
-	always@(posedge rclk)
-		if (rce)                      // clock enable instructs Xilinx tools to use SelectRAM (LUTS) instead of BlockRAM
-			do <= #1 mem[raddr];
-	*/
-
-	always@(posedge rclk)
-		do <= #1 mem[raddr];
+    assign do = mem[ra];
 
 	// write operation
-	always@(posedge wclk)
+	always @(posedge wclk)
 		if (we && wce)
 			mem[waddr] <= #1 di;
 
@@ -295,23 +314,36 @@ module generic_dpram(
 	//
 	// Generic RAM's registers and wires
 	//
-	reg	[dw-1:0]	mem [(1<<aw)-1:0];	// RAM content
+	reg	[dw-1:0]	mem [(1<<aw)-1:0]; // RAM content
 	reg	[dw-1:0]	do_reg;            // RAM data output register
 
 	//
 	// Data output drivers
 	//
-	assign do = (oe) ? do_reg : {dw{1'bz}};
+	assign do = (oe & rce) ? do_reg : {dw{1'bz}};
 
 	// read operation
 	always @(posedge rclk)
 		if (rce)
-			do_reg <= #1 mem[raddr];
+          		do_reg <= #1 (we && (waddr==raddr)) ? {dw{1'b x}} : mem[raddr];
 
 	// write operation
 	always @(posedge wclk)
 		if (wce && we)
 			mem[waddr] <= #1 di;
+
+
+	// Task prints range of memory
+	// *** Remember that tasks are non reentrant, don't call this task in parallel for multiple instantiations.
+	task print_ram;
+	input [aw-1:0] start;
+	input [aw-1:0] finish;
+	integer rnum;
+  	begin
+    		for (rnum=start;rnum<=finish;rnum=rnum+1)
+      			$display("Addr %h = %h",rnum,mem[rnum]);
+  	end
+	endtask
 
 `endif // !VENDOR_VIRAGE
 `endif // !VENDOR_AVANT

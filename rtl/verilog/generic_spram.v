@@ -67,8 +67,6 @@
 // CVS Revision History
 //
 // $Log: not supported by cvs2svn $
-// Revision 1.2  2001/07/30 05:38:02  lampret
-// Adding empty directories required by HDL coding guidelines
 //
 //
 
@@ -76,7 +74,7 @@
 
 //`define VENDOR_XILINX
 //`define VENDOR_ALTERA
-//`define VENDOR_FPGA
+`define VENDOR_FPGA
 
 module generic_spram(
 	// Generic synchronous single-port RAM interface
@@ -112,21 +110,25 @@ module generic_spram(
 	// This code has been tested using LeonardoSpectrum and Synplicity.
 	// The code correctly instantiates Altera EABs and Xilinx BlockRAMs.
 	//
-	reg [dw-1 :0] mem [(1<<aw) -1:0];
-	reg [aw-1:0] raddr;
 
-	always@(posedge clk)
-	begin
-		// read operation
-		raddr <= #1 addr;    // read address needs to be registered to read clock
+	// NOTE:
+	// 'synthesis syn_ramstyle="block_ram"' is a Synplify attribute.
+	// It instructs Synplify to map to BlockRAMs instead of the default SelectRAMs
 
-		// write operation
-		if (we && ce)
-			mem[addr] <= #1 di;
-	end
+	reg [dw-1:0] mem [(1<<aw) -1:0] /* synthesis syn_ramstyle="block_ram" */;
+	reg [aw-1:0] ra;
 
-	assign #1 do = mem[raddr];
+	// read operation
+	always @(posedge clk)
+	  if (ce)
+	    ra <= #1 addr;     // read address needs to be registered to read clock
 
+	assign #1 do = mem[ra];
+
+	// write operation
+	always @(posedge clk)
+	  if (we && ce)
+	    mem[addr] <= #1 di;
 `else
 
 `ifdef VENDOR_XILINX
