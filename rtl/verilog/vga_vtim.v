@@ -37,10 +37,10 @@
 
 //  CVS Log
 //
-//  $Id: vga_vtim.v,v 1.4 2001-11-14 11:45:25 rherveille Exp $
+//  $Id: vga_vtim.v,v 1.5 2002-01-28 03:47:16 rherveille Exp $
 //
-//  $Date: 2001-11-14 11:45:25 $
-//  $Revision: 1.4 $
+//  $Date: 2002-01-28 03:47:16 $
+//  $Revision: 1.5 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
@@ -94,16 +94,56 @@ module vga_vtim(clk, ena, rst, Tsync, Tgdel, Tgate, Tlen, Sync, Gate, Done);
 			end
 
 	// hookup sync counter
-	ro_cnt #(8) sync_cnt (.clk(clk), .rst(rst), .nReset(1'b1), .cnt_en(ena), .go(go), .d(Tsync), .id(Tsync), .q(), .done(Dsync));
+	ro_cnt #(8, 1'b0, 8)
+		sync_cnt(
+			.clk(clk),
+			.rst(rst),
+			.nReset(1'b1),
+			.cnt_en(ena),
+			.go(go),
+			.d(Tsync),
+			.q(),
+			.done(Dsync)
+		);
 
 	// hookup gate delay counter
-	ro_cnt #(8) gdel_cnt (.clk(clk), .rst(rst), .nReset(1'b1), .cnt_en(ena), .go(Dsync), .d(Tgdel), .id(Tgdel), .q(), .done(Dgdel));
+	ro_cnt #(8, 1'b0, 8)
+		gdel_cnt(
+			.clk(clk),
+			.rst(rst),
+			.nReset(1'b1),
+			.cnt_en(ena),
+			.go(Dsync),
+			.d(Tgdel),
+			.q(),
+			.done(Dgdel)
+		);
 
 	// hookup gate counter
-	ro_cnt #(16) gate_cnt (.clk(clk), .rst(rst), .nReset(1'b1), .cnt_en(ena), .go(Dgdel), .d(Tgate), .id(Tgate), .q(), .done(Dgate));
+	ro_cnt #(16, 1'b0, 16)
+		gate_cnt(
+			.clk(clk),
+			.rst(rst),
+			.nReset(1'b1),
+			.cnt_en(ena),
+			.go(Dgdel),
+			.d(Tgate),
+			.q(),
+			.done(Dgate)
+		);
 
 	// hookup length counter
-	ro_cnt #(16) len_cnt (.clk(clk), .rst(rst), .nReset(1'b1), .cnt_en(ena), .go(go), .d(Tlen), .id(Tlen), .q(), .done(Dlen));
+	ro_cnt #(16, 1'b0, 16)
+		len_cnt(
+			.clk(clk),
+			.rst(rst),
+			.nReset(1'b1),
+			.cnt_en(ena),
+			.go(go),
+			.d(Tlen),
+			.q(),
+			.done(Dlen)
+		);
 
 	// hold dgate signal
 	always@(posedge clk)
@@ -134,11 +174,3 @@ module vga_vtim(clk, ena, rst, Tsync, Tgdel, Tgate, Tlen, Sync, Gate, Done);
 
 	assign Done = Dlen;
 endmodule
-
-
-
-
-
-
-
-

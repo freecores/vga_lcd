@@ -37,10 +37,10 @@
 
 //  CVS Log
 //
-//  $Id: vga_colproc.v,v 1.4 2001-11-14 11:45:25 rherveille Exp $
+//  $Id: vga_colproc.v,v 1.5 2002-01-28 03:47:16 rherveille Exp $
 //
-//  $Date: 2001-11-14 11:45:25 $
-//  $Revision: 1.4 $
+//  $Date: 2002-01-28 03:47:16 $
+//  $Revision: 1.5 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
@@ -105,16 +105,17 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 	// generate statemachine
 	//
 	// extract color information from data buffer
-	parameter idle        = 6'b00_0000, 
-	          fill_buf    = 6'b00_0001,
-	          bw_8bpp     = 6'b00_0010,
-	          col_8bpp    = 6'b00_0100,
-	          col_16bpp_a = 6'b00_1000,
-	          col_16bpp_b = 6'b01_0000,
-	          col_24bpp   = 6'b10_0000;
+	parameter idle        = 7'b000_0000, 
+	          fill_buf    = 7'b000_0001,
+	          bw_8bpp     = 7'b000_0010,
+	          col_8bpp    = 7'b000_0100,
+	          col_16bpp_a = 7'b000_1000,
+	          col_16bpp_b = 7'b001_0000,
+	          col_24bpp   = 7'b010_0000,
+	          col_32bpp   = 7'b100_0000;
 
-	reg [5:0] c_state; // synopsis enum_state
-	reg [5:0] nxt_state; // synopsis enum_state
+	reg [6:0] c_state;   // synopsys enum_state
+	reg [6:0] nxt_state; // synopsys enum_state
 
 	// next state decoder
 	always@(c_state or pixel_buffer_empty or ColorDepth or PseudoColor or RGB_fifo_full or colcnt or clut_ack)
@@ -140,8 +141,11 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 					2'b01:
 						nxt_state = col_16bpp_a;
 
-					default:
+					2'b10:
 						nxt_state = col_24bpp;
+
+					2'b11:
+						nxt_state = col_32bpp;
 
 				endcase
 
@@ -189,6 +193,15 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 					else
 						nxt_state = idle;
 
+			//
+			// 32 bits per pixel
+			//
+			col_32bpp:
+				if (!RGB_fifo_full)
+					if (!pixel_buffer_empty)
+						nxt_state = fill_buf;
+					else
+						nxt_state = idle;
 		endcase
 	end // next state decoder
 
@@ -368,6 +381,24 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 				endcase
 			end
 
+			//
+			// 32 bits per pixel
+			//
+			col_32bpp:
+			begin
+				if (!RGB_fifo_full)
+					begin
+						RGBbuf_wreq = 1'b1;
+
+						if (!pixel_buffer_empty)
+							pixelbuf_rreq = 1'b1;
+					end
+
+				iR[7:0] = DataBuffer[23:16];
+				iG[7:0] = DataBuffer[15:8];
+				iB[7:0] = DataBuffer[7:0];
+			end
+
 		endcase
 	end // output decoder
 
@@ -418,3 +449,5 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 		else if (RGBbuf_wreq)
 			colcnt <= #1 colcnt -2'h1;
 endmodule
+
+

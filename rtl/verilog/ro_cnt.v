@@ -1,18 +1,15 @@
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
-////  Run-Once Counter, library module                           ////
-////                                                             ////
+////  Run-Once counter                                           ////
 ////                                                             ////
 ////  Author: Richard Herveille                                  ////
 ////          richard@asics.ws                                   ////
 ////          www.asics.ws                                       ////
 ////                                                             ////
-////                                                             ////
-////                                                             ////
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
-//// Copyright (C) 2001 Richard Herveille                        ////
-////                    richard@asics.ws                         ////
+//// Copyright (C) 2001, 2002 Richard Herveille                  ////
+////                          richard@asics.ws                   ////
 ////                                                             ////
 //// This source file may be used and distributed without        ////
 //// restriction provided that this copyright statement is not   ////
@@ -37,16 +34,17 @@
 
 //  CVS Log
 //
-//  $Id: ro_cnt.v,v 1.4 2001-11-14 11:45:25 rherveille Exp $
+//  $Id: ro_cnt.v,v 1.5 2002-01-28 03:47:16 rherveille Exp $
 //
-//  $Date: 2001-11-14 11:45:25 $
-//  $Revision: 1.4 $
+//  $Date: 2002-01-28 03:47:16 $
+//  $Revision: 1.5 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//
 
 
 ///////////////////////////
@@ -57,9 +55,14 @@
 
 `include "timescale.v"
 
-module ro_cnt (clk, nReset, rst, cnt_en, go, done, d, q, id);
+module ro_cnt (clk, nReset, rst, cnt_en, go, done, d, q);
+
 	// parameter declaration
 	parameter SIZE = 8;
+
+	parameter UD = 1'b0;         // default count down
+	parameter ID = {SIZE{1'b0}}; // initial data after reset
+
 	// inputs & outputs
 	input  clk;           // master clock
 	input  nReset;        // asynchronous active low reset
@@ -69,7 +72,6 @@ module ro_cnt (clk, nReset, rst, cnt_en, go, done, d, q, id);
 	output done;          // done counting
 	input  [SIZE-1:0] d;  // load counter value
 	output [SIZE-1:0] q;  // current counter value
-	input  [SIZE-1:0] id; // initial data after reset
 
 	// variable declarations
 	reg rci;
@@ -85,16 +87,19 @@ module ro_cnt (clk, nReset, rst, cnt_en, go, done, d, q, id);
 		else if (rst)
 			rci <= #1 1'b0;
 		else //if (cnt_en)
-			rci <= #1 (go | rci) & !rco;
+			rci <= #1 go | (rci & !rco);
 
 	assign nld = !go;
 
 	// hookup counter
-	ud_cnt #(SIZE) cnt (.clk(clk), .nReset(nReset), .rst(rst), .cnt_en(cnt_en),
-		.ud(1'b0), .nld(nld), .d(d), .q(q), .resd(id), .rci(rci), .rco(rco));
+	ud_cnt #(SIZE, ID) cnt (.clk(clk), .nReset(nReset), .rst(rst), .cnt_en(cnt_en),
+		.ud(UD), .nld(nld), .d(d), .q(q), .rci(rci), .rco(rco));
+
 
 	// assign outputs
+
 	assign done = rco;
+
 endmodule
 
 

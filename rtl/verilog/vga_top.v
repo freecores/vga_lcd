@@ -37,10 +37,10 @@
 
 //  CVS Log
 //
-//  $Id: vga_top.v,v 1.5 2001-11-14 11:45:25 rherveille Exp $
+//  $Id: vga_top.v,v 1.6 2002-01-28 03:47:16 rherveille Exp $
 //
-//  $Date: 2001-11-14 11:45:25 $
-//  $Revision: 1.5 $
+//  $Date: 2002-01-28 03:47:16 $
+//  $Revision: 1.6 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $

@@ -37,10 +37,10 @@
 
 //  CVS Log
 //
-//  $Id: vga_wb_master.v,v 1.4 2001-11-14 11:45:25 rherveille Exp $
+//  $Id: vga_wb_master.v,v 1.5 2002-01-28 03:47:16 rherveille Exp $
 //
-//  $Date: 2001-11-14 11:45:25 $
-//  $Revision: 1.4 $
+//  $Date: 2002-01-28 03:47:16 $
+//  $Revision: 1.5 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
@@ -274,8 +274,8 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 							hgate_cnt <= #1 Thgate >> 1; // 2 pixels per cycle
 						2'b10: //24bpp
 							hgate_cnt <= #1 Thgate >> 2; // 4/3 pixels per cycle
-						2'b11: //reserved
-							;
+						2'b11: //32bpp
+							hgate_cnt <= #1 Thgate;      // 1 pixel per cycle
 					endcase
 
 					hgate_div_cnt <= 2'b10;
@@ -290,8 +290,8 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 							hgate_cnt <= #1 Thgate >> 1; // 2 pixels per cycle
 						2'b10: //24bpp
 							hgate_cnt <= #1 Thgate >> 2; // 4/3 pixels per cycle
-						2'b11: //reserved
-							;
+						2'b11: //32bpp
+							hgate_cnt <= #1 Thgate;      // 1 pixel per cycle
 					endcase
 					hgate_div_cnt <= #1 2'b10;
 				end
@@ -437,5 +437,6 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 	assign line_fifo_wreq = rgb_fifo_rreq;
 
 endmodule
+
 
 

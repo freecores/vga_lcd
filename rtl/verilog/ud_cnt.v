@@ -1,18 +1,15 @@
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
-////  Universal Up/Down counter, library module                  ////
-////                                                             ////
+////  Generic Up/Down counter                                    ////
 ////                                                             ////
 ////  Author: Richard Herveille                                  ////
 ////          richard@asics.ws                                   ////
 ////          www.asics.ws                                       ////
 ////                                                             ////
-////                                                             ////
-////                                                             ////
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
-//// Copyright (C) 2001 Richard Herveille                        ////
-////                    richard@asics.ws                         ////
+//// Copyright (C) 2001, 2002 Richard Herveille                  ////
+////                          richard@asics.ws                   ////
 ////                                                             ////
 //// This source file may be used and distributed without        ////
 //// restriction provided that this copyright statement is not   ////
@@ -37,16 +34,17 @@
 
 //  CVS Log
 //
-//  $Id: ud_cnt.v,v 1.3 2001-11-14 11:45:25 rherveille Exp $
+//  $Id: ud_cnt.v,v 1.4 2002-01-28 03:47:16 rherveille Exp $
 //
-//  $Date: 2001-11-14 11:45:25 $
-//  $Revision: 1.3 $
+//  $Date: 2002-01-28 03:47:16 $
+//  $Revision: 1.4 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//
 
 
 /////////////////////////////
@@ -55,9 +53,11 @@
 
 `include "timescale.v"
 
-module ud_cnt (clk, nReset, rst, cnt_en, ud, nld, d, q, resd, rci, rco);
+module ud_cnt (clk, nReset, rst, cnt_en, ud, nld, d, q, rci, rco);
 	// parameter declaration
 	parameter SIZE  = 8;
+	parameter RESD  = {SIZE{1'b0}}; // data after reset
+
 	// inputs & outputs
 	input             clk;    // master clock
 	input             nReset; // asynchronous active low reset
@@ -67,7 +67,6 @@ module ud_cnt (clk, nReset, rst, cnt_en, ud, nld, d, q, resd, rci, rco);
 	input             nld;    // synchronous active low load
 	input  [SIZE-1:0] d;      // load counter value
 	output [SIZE-1:0] q;      // current counter value
-	input  [SIZE-1:0] resd;   // initial data after/during reset
 	input             rci;    // carry input
 	output            rco;    // carry output
 
@@ -84,9 +83,9 @@ module ud_cnt (clk, nReset, rst, cnt_en, ud, nld, d, q, resd, rci, rco);
 	always@(posedge clk or negedge nReset)
 	begin
 		if (~nReset)
-			Qi <= #1 resd;
+			Qi <= #1 RESD;
 		else if (rst)
-			Qi <= #1 resd;
+			Qi <= #1 RESD;
 		else	if (~nld)
 			Qi <= #1 d;
 		else if (cnt_en)
@@ -97,3 +96,5 @@ module ud_cnt (clk, nReset, rst, cnt_en, ud, nld, d, q, resd, rci, rco);
 	assign q = Qi;
 	assign rco = val[SIZE];
 endmodule
+
+
