@@ -1,7 +1,7 @@
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
-////  WISHBONE rev.B2 compliant VGA/LCD Core; Defines file       ////
-////                                                             ////
+////  WISHBONE rev.B2 compliant enhanced VGA/LCD Core            ////
+////  Defines file                                               ////
 ////                                                             ////
 ////  Author: Richard Herveille                                  ////
 ////          richard@asics.ws                                   ////
@@ -11,8 +11,8 @@
 ////                                                             ////
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
-//// Copyright (C) 2001 Richard Herveille                        ////
-////                    richard@asics.ws                         ////
+//// Copyright (C) 2001, 2002 Richard Herveille                  ////
+////                          richard@asics.ws                   ////
 ////                                                             ////
 //// This source file may be used and distributed without        ////
 //// restriction provided that this copyright statement is not   ////
@@ -37,10 +37,10 @@
 
 //  CVS Log
 //
-//  $Id: vga_defines.v,v 1.3 2002-01-28 03:47:16 rherveille Exp $
+//  $Id: vga_defines.v,v 1.4 2002-02-07 05:42:10 rherveille Exp $
 //
-//  $Date: 2002-01-28 03:47:16 $
-//  $Revision: 1.3 $
+//  $Date: 2002-02-07 05:42:10 $
+//  $Revision: 1.4 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
@@ -54,3 +54,9 @@
 //
 
 `define VENDOR_FPGA
+
+//
+// enable / disable hardware cursors
+//
+//`define VGA_HWC0
+//`define VGA_HWC1

@@ -37,10 +37,10 @@
 
 //  CVS Log
 //
-//  $Id: vga_csm_pb.v,v 1.5 2002-01-28 03:47:16 rherveille Exp $
+//  $Id: vga_csm_pb.v,v 1.6 2002-02-07 05:42:10 rherveille Exp $
 //
-//  $Date: 2002-01-28 03:47:16 $
-//  $Revision: 1.5 $
+//  $Date: 2002-02-07 05:42:10 $
+//  $Revision: 1.6 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
@@ -141,5 +141,3 @@ module vga_csm_pb (clk_i, req0_i, ack0_o, adr0_i, dat0_i, dat0_o, we0_i, req1_i,
 	assign ack0_o = ( (sel0 && we0_i) || ack0 );
 	assign ack1_o = ( (sel1 && we1_i) || ack1 );
 endmodule
-
-

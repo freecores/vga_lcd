@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
-////  WISHBONE rev.B2 compliant VGA/LCD Core; Wishbone Slave     ////
+////  WISHBONE rev.B2 compliant enhanced VGA/LCD Core            ////
 ////  Wishbone slave interface                                   ////
 ////                                                             ////
 ////  Author: Richard Herveille                                  ////
@@ -11,7 +11,7 @@
 ////                                                             ////
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
-//// Copyright (C) 2001 Richard Herveille                        ////
+//// Copyright (C) 2001, 2002 Richard Herveille                  ////
 ////                    richard@asics.ws                         ////
 ////                                                             ////
 //// This source file may be used and distributed without        ////
@@ -37,10 +37,10 @@
 
 //  CVS Log
 //
-//  $Id: vga_wb_slave.v,v 1.5 2002-01-28 03:47:16 rherveille Exp $
+//  $Id: vga_wb_slave.v,v 1.6 2002-02-07 05:42:10 rherveille Exp $
 //
-//  $Date: 2002-01-28 03:47:16 $
-//  $Revision: 1.5 $
+//  $Date: 2002-02-07 05:42:10 $
+//  $Revision: 1.6 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
@@ -50,9 +50,12 @@
 
 
 `include "timescale.v"
+`include "vga_defines.v"
 
 module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_I, CYC_I, ACK_O, ERR_O, INTA_O,
-		bl, csl, vsl, hsl, pc, cd, vbl, cbsw, vbsw, ven, avmp, acmp, vbsint_in, cbsint_in, hint_in, vint_in, luint_in, sint_in,
+		bl, csl, vsl, hsl, pc, cd, vbl, cbsw, vbsw, ven, avmp, acmp, 
+		cursor0_en, cursor0_xy, cursor0_ba, cursor0_ld, cursor1_en, cursor1_xy, cursor1_ba, cursor1_ld,
+		vbsint_in, cbsint_in, hint_in, vint_in, luint_in, sint_in,
 		Thsync, Thgdel, Thgate, Thlen, Tvsync, Tvgdel, Tvgate, Tvlen, VBARa, VBARb, clut_acc, clut_ack, clut_q);
 
 	//
@@ -79,16 +82,33 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 	reg INTA_O;
 
 	// control register settings
-	output bl;   // blanking level
-	output csl;  // composite sync level
-	output vsl;  // vsync level
-	output hsl;  // hsync level
-	output pc;   // pseudo color
+	output bl;         // blanking level
+	output csl;        // composite sync level
+	output vsl;        // vsync level
+	output hsl;        // hsync level
+	output pc;         // pseudo color
 	output [1:0] cd;   // color depth
 	output [1:0] vbl;  // video memory burst length
-	output cbsw; // clut bank switch enable
-	output vbsw; // video memory bank switch enable
-	output ven;  // vdeio system enable
+	output cbsw;       // clut bank switch enable
+	output vbsw;       // video memory bank switch enable
+	output ven;        // video system enable
+
+	// hardware cursor settings
+	output         cursor0_en;
+	output [31: 0] cursor0_xy;
+	output [31:11] cursor0_ba;   // cursor0 base address
+	output         cursor0_ld;   // reload cursor0 from video memory
+	output         cursor1_en;
+	output [31: 0] cursor1_xy;
+	output [31:11] cursor1_ba;   // cursor1 base address
+	output         cursor1_ld;   // reload cursor1 from video memory
+
+	reg [31: 0] cursor0_xy;
+	reg [31:11] cursor0_ba;
+	reg         cursor0_ld;
+	reg [31: 0] cursor1_xy;
+	reg [31:11] cursor1_ba;
+	reg         cursor1_ld;
 
 	// status register inputs
 	input avmp;          // active video memory page
@@ -113,10 +133,10 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 	output [15:0] Tvlen;
 
 	// video base addresses
-	output [31: 2] VBARa;
-	reg [31: 2] VBARa;
-	output [31: 2] VBARb;
-	reg [31: 2] VBARb;
+	output [31:2] VBARa;
+	reg [31:2] VBARa;
+	output [31:2] VBARb;
+	reg [31:2] VBARb;
 
 	// color lookup table signals
 	output        clut_acc;
@@ -127,16 +147,22 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 	//
 	// variable declarations
 	//
-	wire [2:0] REG_ADR  = ADR_I[4:2];
-	wire       CLUT_ADR = ADR_I[11];
+	parameter REG_ADR_HIBIT = 3;
 
-	parameter [2:0] CTRL_ADR  = 3'b000;
-	parameter [2:0] STAT_ADR  = 3'b001;
-	parameter [2:0] HTIM_ADR  = 3'b010;
-	parameter [2:0] VTIM_ADR  = 3'b011;
-	parameter [2:0] HVLEN_ADR = 3'b100;
-	parameter [2:0] VBARA_ADR = 3'b101;
-	parameter [2:0] VBARB_ADR = 3'b110;
+	wire [REG_ADR_HIBIT:0] REG_ADR  = ADR_I[REG_ADR_HIBIT +2 : 2];
+	wire                   CLUT_ADR = ADR_I[11];
+
+	parameter [REG_ADR_HIBIT : 0] CTRL_ADR  = 4'b0000;
+	parameter [REG_ADR_HIBIT : 0] STAT_ADR  = 4'b0001;
+	parameter [REG_ADR_HIBIT : 0] HTIM_ADR  = 4'b0010;
+	parameter [REG_ADR_HIBIT : 0] VTIM_ADR  = 4'b0011;
+	parameter [REG_ADR_HIBIT : 0] HVLEN_ADR = 4'b0100;
+	parameter [REG_ADR_HIBIT : 0] VBARA_ADR = 4'b0101;
+	parameter [REG_ADR_HIBIT : 0] VBARB_ADR = 4'b0110;
+	parameter [REG_ADR_HIBIT : 0] C0XY_ADR  = 4'b1000;
+	parameter [REG_ADR_HIBIT : 0] C0BAR_ADR = 4'b1001;
+	parameter [REG_ADR_HIBIT : 0] C1XY_ADR  = 4'b1010;
+	parameter [REG_ADR_HIBIT : 0] C1BAR_ADR = 4'b1011;
 
 
 	reg [31:0] ctrl, stat, htim, vtim, hvlen;
@@ -185,14 +211,23 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 			end
 		else if (reg_wacc)
 			case (ADR_I)	// synopsis full_case parallel_case
-				HTIM_ADR  : htim  <= #1 DAT_I;
-				VTIM_ADR  : vtim  <= #1 DAT_I;
-				HVLEN_ADR : hvlen <= #1 DAT_I;
-				VBARA_ADR : VBARa <= #1 DAT_I[31: 2];
-				VBARB_ADR : VBARb <= #1 DAT_I[31: 2];
+				HTIM_ADR  : htim       <= #1 DAT_I;
+				VTIM_ADR  : vtim       <= #1 DAT_I;
+				HVLEN_ADR : hvlen      <= #1 DAT_I;
+				VBARA_ADR : VBARa      <= #1 DAT_I[31: 2];
+				VBARB_ADR : VBARb      <= #1 DAT_I[31: 2];
+				C0XY_ADR  : cursor0_xy <= #1 DAT_I[31: 0];
+				C0BAR_ADR : cursor0_ba <= #1 DAT_I[31:11];
+				C1XY_ADR  : cursor1_xy <= #1 DAT_I[31: 0];
+				C1BAR_ADR : cursor1_ba <= #1 DAT_I[31:11];
 			endcase
 	end
 
+	always@(posedge CLK_I)
+		begin
+			cursor0_ld <= #1 reg_wacc && (ADR_I == C0BAR_ADR);
+			cursor1_ld <= #1 reg_wacc && (ADR_I == C1BAR_ADR);
+		end
 
 	// generate control register
 	always@(posedge CLK_I or negedge nRESET)
@@ -217,8 +252,20 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 			stat <= #1 0;
 		else
 			begin
+				`ifdef VGA_HWC1
+					stat[21] <= #1 1'b1;
+				`else
+					stat[21] <= #1 1'b0;
+				`endif
+				`ifdef VGA_HWC0
+					stat[20] <= #1 1'b1;
+				`else
+					stat[20] <= #1 1'b0;
+				`endif
+
 				stat[17] <= #1 acmp;
 				stat[16] <= #1 avmp;
+
 				if (reg_wacc & (REG_ADR == STAT_ADR) )
 					begin
 						stat[7] <= #1 cbsint_in | (stat[7] & !DAT_I[7]);
@@ -241,20 +288,22 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 
 
 	// decode control register
-	assign bl    = ctrl[15];
-	assign csl   = ctrl[14];
-	assign vsl   = ctrl[13];
-	assign hsl   = ctrl[12];
-	assign pc    = ctrl[11];
-	assign cd    = ctrl[10:9];
-	assign vbl   = ctrl[8:7];
-	assign cbsw  = ctrl[6];
-	assign vbsw  = ctrl[5];
-	assign cbsie = ctrl[4];
-	assign vbsie = ctrl[3];
-	assign hie   = ctrl[2];
-	assign vie   = ctrl[1];
-	assign ven   = ctrl[0];
+	assign cursor1_en = ctrl[21];
+	assign cursor0_en = ctrl[20];
+	assign bl         = ctrl[15];
+	assign csl        = ctrl[14];
+	assign vsl        = ctrl[13];
+	assign hsl        = ctrl[12];
+	assign pc         = ctrl[11];
+	assign cd         = ctrl[10:9];
+	assign vbl        = ctrl[8:7];
+	assign cbsw       = ctrl[6];
+	assign vbsw       = ctrl[5];
+	assign cbsie      = ctrl[4];
+	assign vbsie      = ctrl[3];
+	assign hie        = ctrl[2];
+	assign vie        = ctrl[1];
+	assign ven        = ctrl[0];
 
 	// decode status register
 	assign cbsint = stat[7];
@@ -287,6 +336,10 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 		HVLEN_ADR : reg_dato = hvlen;
 		VBARA_ADR : reg_dato = {VBARa, 2'b0};
 		VBARB_ADR : reg_dato = {VBARb, 2'b0};
+		C0XY_ADR  : reg_dato = cursor0_xy;
+		C0BAR_ADR : reg_dato = {cursor0_ba, 11'h0};
+		C1XY_ADR  : reg_dato = cursor1_xy;
+		C1BAR_ADR : reg_dato = {cursor1_ba, 11'h0};
 		default   : reg_dato = 32'h0000_0000;
 	endcase
 
@@ -297,4 +350,5 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 	always@(posedge CLK_I)
 		INTA_O <= #1 (hint & hie) | (vint & vie) | (vbsint & vbsie) | (cbsint & cbsie) | luint | sint;
 endmodule
+
 

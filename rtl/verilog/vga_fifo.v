@@ -37,10 +37,10 @@
 
 //  CVS Log
 //
-//  $Id: vga_fifo.v,v 1.5 2002-01-28 03:47:16 rherveille Exp $
+//  $Id: vga_fifo.v,v 1.6 2002-02-07 05:42:10 rherveille Exp $
 //
-//  $Date: 2002-01-28 03:47:16 $
-//  $Revision: 1.5 $
+//  $Date: 2002-02-07 05:42:10 $
+//  $Revision: 1.6 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
@@ -134,6 +134,7 @@ module vga_fifo (clk, aclr, sclr, d, wreq, q, rreq, empty, hfull, full);
 
 	// status flags
 	assign empty = !(|fifo_cnt);
-	assign hfull = fifo_cnt[AWIDTH -1];
+	assign hfull = fifo_cnt[AWIDTH -1] | fifo_cnt[AWIDTH];
 	assign full  = fifo_cnt[AWIDTH];
 endmodule
+

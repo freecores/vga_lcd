@@ -1,7 +1,7 @@
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
-////  WISHBONE rev.B2 compliant VGA/LCD Core; Color Processor    ////
-////                                                             ////
+////  WISHBONE rev.B2 compliant VGA/LCD Core                     ////
+////  Enhanced Color Processor                                   ////
 ////                                                             ////
 ////  Author: Richard Herveille                                  ////
 ////          richard@asics.ws                                   ////
@@ -11,8 +11,8 @@
 ////                                                             ////
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
-//// Copyright (C) 2001 Richard Herveille                        ////
-////                    richard@asics.ws                         ////
+//// Copyright (C) 2001, 2002 Richard Herveille                  ////
+////                          richard@asics.ws                   ////
 ////                                                             ////
 //// This source file may be used and distributed without        ////
 //// restriction provided that this copyright statement is not   ////
@@ -37,10 +37,10 @@
 
 //  CVS Log
 //
-//  $Id: vga_colproc.v,v 1.5 2002-01-28 03:47:16 rherveille Exp $
+//  $Id: vga_colproc.v,v 1.6 2002-02-07 05:42:10 rherveille Exp $
 //
-//  $Date: 2002-01-28 03:47:16 $
-//  $Revision: 1.5 $
+//  $Date: 2002-02-07 05:42:10 $
+//  $Revision: 1.6 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
@@ -50,9 +50,9 @@
 
 `include "timescale.v"
 
-module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor, 
-						pixel_buffer_empty, pixel_buffer_rreq, RGB_fifo_full,
-						RGB_fifo_wreq, R, G, B, 
+module vga_colproc(clk, srst, vdat_buffer_di, ColorDepth, PseudoColor, 
+						vdat_buffer_empty, vdat_buffer_rreq, rgb_fifo_full,
+						rgb_fifo_wreq, r, g, b, 
 						clut_req, clut_ack, clut_offs, clut_q);
 
 	//
@@ -61,27 +61,27 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 	input clk;                    // master clock
 	input srst;                   // synchronous reset
 
-	input [31:0] pixel_buffer_di; // Pixel Buffer data input
+	input [31:0] vdat_buffer_di; // video memory data input
 
 	input [1:0] ColorDepth;       // color depth (8bpp, 16bpp, 24bpp)
 	input       PseudoColor;      // pseudo color enabled (only for 8bpp color depth)
 
-	input  pixel_buffer_empty;
-	output pixel_buffer_rreq;     // pixel buffer read request
-	reg    pixel_buffer_rreq;
+	input  vdat_buffer_empty;
+	output vdat_buffer_rreq;     // pixel buffer read request
+	reg    vdat_buffer_rreq;
 
-	input  RGB_fifo_full;
-	output RGB_fifo_wreq;
-	reg    RGB_fifo_wreq;
-	output [7:0] R, G, B;         // pixel color information
-	reg    [7:0] R, G, B;
+	input  rgb_fifo_full;
+	output rgb_fifo_wreq;
+	reg    rgb_fifo_wreq;
+	output [7:0] r, g, b;         // pixel color information
+	reg    [7:0] r, g, b;
 
-	output        clut_req;  // clut request
+	output        clut_req;       // clut request
 	reg clut_req;
-	input         clut_ack;  // clut acknowledge
-	output [ 7:0] clut_offs; // clut offset
+	input         clut_ack;       // clut acknowledge
+	output [ 7:0] clut_offs;      // clut offset
 	reg [7:0] clut_offs;
-	input  [23:0] clut_q;    // clut data in
+	input  [23:0] clut_q;         // clut data in
 
 	//
 	// variable declarations
@@ -98,8 +98,8 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 
 	// store word from pixelbuffer / wishbone input
 	always@(posedge clk)
-		if (pixel_buffer_rreq)
-			DataBuffer <= #1 pixel_buffer_di;
+		if (vdat_buffer_rreq)
+			DataBuffer <= #1 vdat_buffer_di;
 
 	//
 	// generate statemachine
@@ -118,7 +118,7 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 	reg [6:0] nxt_state; // synopsys enum_state
 
 	// next state decoder
-	always@(c_state or pixel_buffer_empty or ColorDepth or PseudoColor or RGB_fifo_full or colcnt or clut_ack)
+	always@(c_state or vdat_buffer_empty or ColorDepth or PseudoColor or rgb_fifo_full or colcnt or clut_ack)
 	begin : nxt_state_decoder
 		// initial value
 		nxt_state = c_state;
@@ -126,7 +126,7 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 		case (c_state) // synopsis full_case parallel_case
 			// idle state
 			idle:
-				if (!pixel_buffer_empty)
+				if (!vdat_buffer_empty && !rgb_fifo_full)
 					nxt_state = fill_buf;
 
 			// fill data buffer
@@ -153,30 +153,34 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 			// 8 bits per pixel
 			//
 			bw_8bpp:
-				if (!RGB_fifo_full && !(|colcnt) )
-					if (!pixel_buffer_empty)
+				if (!rgb_fifo_full && !(|colcnt) )
+					if (!vdat_buffer_empty)
 						nxt_state = fill_buf;
 					else
 						nxt_state = idle;
 
 			col_8bpp:
-				if (!RGB_fifo_full && !(|colcnt) )
-					if (clut_ack)
-						if (!pixel_buffer_empty)
-							nxt_state = fill_buf;
-						else
-							nxt_state = idle;
+				// do NOT check for rgb_fifo_full here, because in 8bpp_pc mode
+				// the color-processor always finishes the current 4pixel-block
+				// i.e. it runs until colcnt = '11'
+				// This is because of the late clut-response which shuffles all
+				// signals the state-machine depends on.
+				if (!(|colcnt))
+					if (!vdat_buffer_empty)
+						nxt_state = fill_buf;
+					else
+						nxt_state = idle;
 
 			//
 			// 16 bits per pixel
 			//
 			col_16bpp_a:
-				if (!RGB_fifo_full)
+				if (!rgb_fifo_full)
 					nxt_state = col_16bpp_b;
 
 			col_16bpp_b:
-				if (!RGB_fifo_full)
-					if (!pixel_buffer_empty)
+				if (!rgb_fifo_full)
+					if (!vdat_buffer_empty)
 						nxt_state = fill_buf;
 					else
 						nxt_state = idle;
@@ -185,10 +189,10 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 			// 24 bits per pixel
 			//
 			col_24bpp:
-				if (!RGB_fifo_full)
+				if (!rgb_fifo_full)
 					if (colcnt == 2'h1) // (colcnt == 1)
 						nxt_state = col_24bpp; // stay in current state
-					else if (!pixel_buffer_empty)
+					else if (!vdat_buffer_empty)
 						nxt_state = fill_buf;
 					else
 						nxt_state = idle;
@@ -197,8 +201,8 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 			// 32 bits per pixel
 			//
 			col_32bpp:
-				if (!RGB_fifo_full)
-					if (!pixel_buffer_empty)
+				if (!rgb_fifo_full)
+					if (!vdat_buffer_empty)
 						nxt_state = fill_buf;
 					else
 						nxt_state = idle;
@@ -214,15 +218,15 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 
 
 	reg iclut_req;
-	reg pixelbuf_rreq;
+	reg ivdat_buf_rreq;
 	reg [7:0] iR, iG, iB, iRa, iGa, iBa;
 
 	// output decoder
-	always@(c_state or pixel_buffer_empty or colcnt or DataBuffer or RGB_fifo_full or clut_ack or clut_q or Ba or Ga or Ra)
+	always@(c_state or vdat_buffer_empty or colcnt or DataBuffer or rgb_fifo_full or clut_ack or clut_q or Ba or Ga or Ra)
 	begin : output_decoder
 
 		// initial values
-		pixelbuf_rreq = 1'b0;
+		ivdat_buf_rreq = 1'b0;
 		RGBbuf_wreq = 1'b0;
 		iclut_req = 1'b0;
 				
@@ -235,20 +239,40 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 
 		case (c_state) // synopsis full_case parallel_case
 			idle:
-				if (!pixel_buffer_empty)
-					pixelbuf_rreq = 1'b1;
+				begin
+					if (!rgb_fifo_full)
+						if (!vdat_buffer_empty)
+							ivdat_buf_rreq = 1'b1;
+
+					// when entering from 8bpp_pseudo_color_mode
+					RGBbuf_wreq = clut_ack;
+
+					iR = clut_q[23:16];
+					iG = clut_q[15: 8];
+					iB = clut_q[ 7: 0];
+				end
+
+			fill_buf:
+				begin
+					// when entering from 8bpp_pseudo_color_mode
+					RGBbuf_wreq = clut_ack;
+
+					iR = clut_q[23:16];
+					iG = clut_q[15: 8];
+					iB = clut_q[ 7: 0];
+				end
 
 			//		
 			// 8 bits per pixel
 			//
 			bw_8bpp:
 			begin
-				if (!RGB_fifo_full)
+				if (!rgb_fifo_full)
 					begin
 						RGBbuf_wreq = 1'b1;
 
-						if ( (!pixel_buffer_empty) && !(|colcnt) )
-							pixelbuf_rreq = 1'b1;
+						if ( (!vdat_buffer_empty) && !(|colcnt) )
+							ivdat_buf_rreq = 1'b1;
 					end
 
 				case (colcnt) // synopsis full_case parallel_case
@@ -284,22 +308,22 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 
 			col_8bpp:
 			begin
-				if (!RGB_fifo_full & clut_ack)
-					begin
-						RGBbuf_wreq = 1'b1;
+				// do NOT check for rgb_fifo_full here, because in 8bpp_pc mode
+				// the color-processor always finishes the current 4pixel-block
+				// i.e. it runs until colcnt = '11'.
+				// This is because of the late clut-response which shuffles all
+				// signals the state-machine depends on.
+				if (!(|colcnt))
+					if (!vdat_buffer_empty && !(|colcnt) )
+						ivdat_buf_rreq = 1'b1;
 
-						if ( (!pixel_buffer_empty) && !(|colcnt) )
-							pixelbuf_rreq = 1'b1;
-					end
+				RGBbuf_wreq = clut_ack;
 
 				iR = clut_q[23:16];
 				iG = clut_q[15: 8];
 				iB = clut_q[ 7: 0];
 
-				iclut_req = ~RGB_fifo_full;
-
-				if ( !(|colcnt) && clut_ack)
-					iclut_req =1'b0;
+				iclut_req = !rgb_fifo_full || (colcnt[1] ^ colcnt[0]);
 			end
 
 			//
@@ -307,7 +331,7 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 			//
 			col_16bpp_a:
 			begin
-				if (!RGB_fifo_full)
+				if (!rgb_fifo_full)
 					RGBbuf_wreq = 1'b1;
 
 				iR[7:3] = DataBuffer[31:27];
@@ -317,12 +341,12 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 
 			col_16bpp_b:
 			begin
-				if (!RGB_fifo_full)
+				if (!rgb_fifo_full)
 					begin
 						RGBbuf_wreq = 1'b1;
 
-						if (!pixel_buffer_empty)
-							pixelbuf_rreq = 1'b1;
+						if (!vdat_buffer_empty)
+							ivdat_buf_rreq = 1'b1;
 					end
 
 				iR[7:3] = DataBuffer[15:11];
@@ -335,12 +359,12 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 			//
 			col_24bpp:
 			begin
-				if (!RGB_fifo_full)
+				if (!rgb_fifo_full)
 					begin
 						RGBbuf_wreq = 1'b1;
 
-						if ( (colcnt != 2'h1) && !pixel_buffer_empty)
-							pixelbuf_rreq = 1'b1;
+						if ( (colcnt != 2'h1) && !vdat_buffer_empty)
+							ivdat_buf_rreq = 1'b1;
 					end
 
 
@@ -386,12 +410,12 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 			//
 			col_32bpp:
 			begin
-				if (!RGB_fifo_full)
+				if (!rgb_fifo_full)
 					begin
 						RGBbuf_wreq = 1'b1;
 
-						if (!pixel_buffer_empty)
-							pixelbuf_rreq = 1'b1;
+						if (!vdat_buffer_empty)
+							ivdat_buf_rreq = 1'b1;
 					end
 
 				iR[7:0] = DataBuffer[23:16];
@@ -405,9 +429,9 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 	// generate output registers
 	always@(posedge clk)
 		begin
-			R  <= #1 iR;
-			G  <= #1 iG;
-			B  <= #1 iB;
+			r  <= #1 iR;
+			g  <= #1 iG;
+			b  <= #1 iB;
 
 			if (RGBbuf_wreq)
 				begin
@@ -418,14 +442,14 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 
 			if (srst)
 				begin
-					pixel_buffer_rreq <= #1 1'b0;
-					RGB_fifo_wreq <= #1 1'b0;
+					vdat_buffer_rreq <= #1 1'b0;
+					rgb_fifo_wreq <= #1 1'b0;
 					clut_req <= #1 1'b0;
 				end
 			else
 				begin
-					pixel_buffer_rreq <= #1 pixelbuf_rreq;
-					RGB_fifo_wreq <= #1 RGBbuf_wreq;
+					vdat_buffer_rreq <= #1 ivdat_buf_rreq;
+					rgb_fifo_wreq <= #1 RGBbuf_wreq;
 					clut_req <= #1 iclut_req;
 				end
 	end
@@ -449,5 +473,18 @@ module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor,
 		else if (RGBbuf_wreq)
 			colcnt <= #1 colcnt -2'h1;
 endmodule
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

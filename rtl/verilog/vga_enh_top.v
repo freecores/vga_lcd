@@ -1,7 +1,7 @@
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
-////  WISHBONE rev.B2 compliant VGA/LCD Core; Top Level          ////
-////                                                             ////
+////  WISHBONE rev.B2 compliant Enhanced VGA/LCD Core            ////
+////  Top Level                                                  ////
 ////                                                             ////
 ////  Author: Richard Herveille                                  ////
 ////          richard@asics.ws                                   ////
@@ -11,8 +11,8 @@
 ////                                                             ////
 /////////////////////////////////////////////////////////////////////
 ////                                                             ////
-//// Copyright (C) 2001 Richard Herveille                        ////
-////                    richard@asics.ws                         ////
+//// Copyright (C) 2001,2002 Richard Herveille                   ////
+////                         richard@asics.ws                    ////
 ////                                                             ////
 //// This source file may be used and distributed without        ////
 //// restriction provided that this copyright statement is not   ////
@@ -37,10 +37,10 @@
 
 //  CVS Log
 //
-//  $Id: vga_top.v,v 1.6 2002-01-28 03:47:16 rherveille Exp $
+//  $Id: vga_enh_top.v,v 1.1 2002-02-07 05:42:10 rherveille Exp $
 //
-//  $Date: 2002-01-28 03:47:16 $
-//  $Revision: 1.6 $
+//  $Date: 2002-02-07 05:42:10 $
+//  $Revision: 1.1 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
@@ -51,7 +51,7 @@
 `include "timescale.v"
 `include "vga_defines.v"
 
-module vga_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o, 
+module vga_enh_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o, 
 		wbs_adr_i, wbs_dat_i, wbs_dat_o, wbs_sel_i, wbs_we_i, wbs_stb_i, wbs_cyc_i, wbs_ack_o, wbs_err_o, 
 		wbm_adr_o,	wbm_dat_i, wbm_cab_o,  wbm_sel_o, wbm_we_o, wbm_stb_o, wbm_cyc_o, wbm_ack_i, wbm_err_i,
 		clk_p_i, hsync_pad_o, vsync_pad_o, csync_pad_o, blank_pad_o, r_pad_o, g_pad_o, b_pad_o);
@@ -119,6 +119,10 @@ module vga_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 	wire [ 7: 0] Thsync, Thgdel, Tvsync, Tvgdel;
 	wire [15: 0] Thgate, Thlen, Tvgate, Tvlen;
 	wire [31: 2] VBARa, VBARb;
+	wire [31: 0] cursor0_xy, cursor1_xy;
+	wire         cursor0_en, cursor1_en;
+	wire [31:11] cursor0_ba, cursor1_ba;
+	wire         cursor0_ld, cursor1_ld;
 
 	// to wb_slave
 	wire stat_avmp, stat_acmp, vmem_swint, clut_swint, hint, vint, sint;
@@ -133,8 +137,8 @@ module vga_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 	wire [23:0] line_fifo_dpm_d, line_fifo_dpm_q;
 
 	// clut connections
-	wire        clut_req, clut_ack;
-	wire [23:0] clut_q;
+	wire        ext_clut_req, ext_clut_ack;
+	wire [23:0] ext_clut_q;
 	wire        cp_clut_req, cp_clut_ack;
 	wire [ 8:0] cp_clut_adr;
 	wire [23:0] cp_clut_q;
@@ -173,6 +177,14 @@ module vga_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 		.ven(ctrl_ven),
 		.acmp(stat_acmp),
 		.avmp(stat_avmp),
+		.cursor0_en(cursor0_en),    // cursor0 enable
+		.cursor0_xy(cursor0_xy),    // cursor0 (x,y)
+		.cursor0_ba(cursor0_ba),    // curso0 video memory base address
+		.cursor0_ld(cursor0_ld),    // reload curso0 from video memory
+		.cursor1_en(cursor1_en),    // cursor1 enable
+		.cursor1_xy(cursor1_xy),    // cursor1 (x,y)
+		.cursor1_ba(cursor1_ba),    // cursor1 video memory base address
+		.cursor1_ld(cursor1_ld),    // reload cursor1 from video memory
 		.vbsint_in(vmem_swint),     // video memory bank switch interrupt
 		.cbsint_in(clut_swint),     // clut memory bank switch interrupt
 		.hint_in(hint),             // horizontal interrupt
@@ -189,9 +201,9 @@ module vga_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 		.Tvlen(Tvlen),
 		.VBARa(VBARa),
 		.VBARb(VBARb),
-		.clut_acc(clut_req),
-		.clut_ack(clut_ack),
-		.clut_q(clut_q)
+		.clut_acc(ext_clut_req),
+		.clut_ack(ext_clut_ack),
+		.clut_q(ext_clut_q)
 	);
 
 	// hookup wishbone master
@@ -218,6 +230,14 @@ module vga_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 		.ctrl_vbl(ctrl_vbl),
 		.ctrl_cbsw(ctrl_cbsw),
 		.ctrl_vbsw(ctrl_vbsw),
+		.cursor0_en(cursor0_en),    // cursor0 enable
+		.cursor0_xy(cursor0_xy),    // cursor0 (x,y)
+		.cursor0_ba(cursor0_ba),    // curso0 video memory base address
+		.cursor0_ld(cursor0_ld),    // reload curso0 from video memory
+		.cursor1_en(cursor1_en),    // cursor1 enable
+		.cursor1_xy(cursor1_xy),    // cursor1 (x,y)
+		.cursor1_ba(cursor1_ba),    // cursor1 video memory base address
+		.cursor1_ld(cursor1_ld),    // reload cursor1 from video memory
 		.VBAa(VBARa),
 		.VBAb(VBARb),
 		.Thgate(Thgate),
@@ -252,11 +272,11 @@ module vga_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 		.we0_i(1'b0), // no writes
 
 		// external access
-		.req1_i(clut_req),
-		.ack1_o(clut_ack),
+		.req1_i(ext_clut_req),
+		.ack1_o(ext_clut_ack),
 		.adr1_i(wbs_adr_i[10:2]),
 		.dat1_i(wbs_dat_i[23:0]),
-		.dat1_o(clut_q),
+		.dat1_o(ext_clut_q),
 		.we1_i(wbs_we_i)
 	);
 
@@ -344,7 +364,3 @@ module vga_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 			end
 
 endmodule
-
-
-
-
