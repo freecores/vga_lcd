@@ -37,16 +37,20 @@
 
 //  CVS Log
 //
-//  $Id: test_bench_top.v,v 1.5 2003-03-19 12:20:53 rherveille Exp $
+//  $Id: test_bench_top.v,v 1.6 2003-03-19 17:22:19 rherveille Exp $
 //
-//  $Date: 2003-03-19 12:20:53 $
-//  $Revision: 1.5 $
+//  $Date: 2003-03-19 17:22:19 $
+//  $Revision: 1.6 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.5  2003/03/19 12:20:53  rherveille
+//               Changed timing section in VGA core, changed testbench accordingly.
+//               Fixed bug in 'timing check' test.
+//
 //               Revision 1.4  2002/02/07 05:38:32  rherveille
 //               Added wb_ack delay section to testbench
 //
@@ -73,6 +77,8 @@ wire	[3:0]	wb_sel_o;
 wire		wb_we_o;
 wire		wb_stb_o;
 wire		wb_cyc_o;
+wire	[2:0]	wb_cti_o;
+wire	[1:0]	wb_bte_o;
 wire		wb_ack_i;
 wire		wb_err_i;
 wire	[31:0]	wb_addr_i;
@@ -443,7 +449,7 @@ for(bank=0;bank<3;bank=bank + 1)
 
 		@(posedge pclk);
 
-	   end	
+	   end
    end
 
 show_errors;
@@ -463,7 +469,7 @@ $display("*****************************************************\n\n");
 // Sync Monitor
 //
 
-sync_check #(PCLK_C) uceck(
+sync_check #(PCLK_C) ucheck(
 		.pclk(		pclk		),
 		.rst(		rst		),
 		.enable(	scen		),
@@ -488,6 +494,23 @@ sync_check #(PCLK_C) uceck(
 //
 // Video Data Monitor
 //
+
+/////////////////////////////////////////////////////////////////////
+//
+// WISHBONE revB.3 checker
+//
+
+wb_b3_check u_wb_check (
+	.clk_i ( clk      ),
+	.cyc_i ( wb_cyc_o ),
+	.stb_i ( wb_stb_o ),
+	.cti_i ( wb_cti_o ),
+	.bte_i ( wb_bte_o ),
+	.we_i  ( wb_we_i  ),
+	.ack_i ( wb_ack_i ),
+	.err_i ( wb_err_i ),
+	.rty_i ( 1'b0     ) );
+
 
 /////////////////////////////////////////////////////////////////////
 //
@@ -526,13 +549,12 @@ assign clk_v = clk;
 
 /////////////////////////////////////////////////////////////////////
 //
-// WISHBONE DMA IP Core
+// WISHBONE VGA/LCD IP Core
 //
 
 
 // Module Prototype
 
-`ifdef USE_VC
 vga_enh_top #(1'b0, LINE_FIFO_AWIDTH) u0 (
 		.wb_clk_i    ( clk             ),
 		.wb_rst_i    ( 1'b0            ),
@@ -572,48 +594,6 @@ vga_enh_top #(1'b0, LINE_FIFO_AWIDTH) u0 (
 		.g_pad_o     ( green           ),
 		.b_pad_o     ( blue            )
 	);
-
-`else
-
-VGA u0 (	.CLK_I(	clk_v		),
-		.RST_I(		~rst		),
-		.NRESET(	rst		),
-		.INTA_O(	int		),
-
-		//-- slave signals
-		.ADR_I(		wb_addr_i[4:2]	),
-		.SDAT_I(	wb_data_i	),
-		.SDAT_O(	wb_data_o	),
-		.SEL_I(		wb_sel_i	),
-		.WE_I(		wb_we_i		),
-		.STB_I(		wb_stb_i	),
-		.CYC_I(		wb_cyc_i	),
-		.ACK_O(		wb_ack_o	),
-		.ERR_O(		wb_err_o	),
-
-		//-- master signals
-		.ADR_O(		wb_addr_o[31:2]	),
-		.MDAT_I(	wbm_data_i	),
-		.SEL_O(		wb_sel_o	),
-		.WE_O(		wb_we_o		),
-		.STB_O(		wb_stb_o	),
-		.CYC_O(		wb_cyc_o	),
-		.CAB_O(				),
-		.ACK_I(		wb_ack_i	),
-		.ERR_I(		wb_err_i	),
-
-		//-- VGA signals
-		.PCLK(		pclk		),
-		.HSYNC(		hsync		),
-		.VSYNC(		vsync		),
-		.CSYNC(		csync		),
-		.BLANK(		blanc		),
-		.R(		red		),
-		.G(		green		),
-		.B(		blue		)
-	);
-
-`endif
 
 wb_mast	m0(	.clk(		clk		),
 		.rst(		rst		),
