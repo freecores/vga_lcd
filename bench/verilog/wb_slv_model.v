@@ -37,16 +37,22 @@
 
 //  CVS Log
 //
-//  $Id: wb_slv_model.v,v 1.1 2001-08-21 05:42:32 rudi Exp $
+//  $Id: wb_slv_model.v,v 1.2 2002-02-07 05:38:32 rherveille Exp $
 //
-//  $Date: 2001-08-21 05:42:32 $
-//  $Revision: 1.1 $
-//  $Author: rudi $
+//  $Date: 2002-02-07 05:38:32 $
+//  $Revision: 1.2 $
+//  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.1  2001/08/21 05:42:32  rudi
+//
+//               - Changed Directory Structure
+//               - Added verilog Source Code
+//               - Changed IO pin names and defines statements
+//
 //
 //
 //
@@ -124,9 +130,9 @@ always @(posedge clk)
 	if(mem_we)	mem[adr[mem_size+1:2]] <= #1 tmp2;
 
 always @(posedge clk)
-	del_ack = ack ? 0 : {del_ack[30:0], (mem_re | mem_we)};
+	del_ack = ack ? 0 : {del_ack[30:0], cyc & stb};
 
-assign	#3 ack = cyc & ((delay==0) ? (mem_re | mem_we) : del_ack[delay-1]);
+assign	ack = cyc & stb & ((delay==0) ? 1'b1 : del_ack[delay-1]);
 
 task fill_mem;
 input		mode;
@@ -148,3 +154,4 @@ end
 endtask
 
 endmodule
+

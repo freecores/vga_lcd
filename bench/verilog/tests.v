@@ -3,8 +3,8 @@
 ////  Tests Library                                              ////
 ////                                                             ////
 ////                                                             ////
-////  Author: Rudolf Usselmann                                   ////
-////          rudi@asics.ws                                      ////
+////  Authors: Rudolf Usselmann, Richard Herveille               ////
+////           rudi@asics.ws,    richard@asics.ws                ////
 ////                                                             ////
 ////                                                             ////
 ////  Downloaded from: http://www.opencores.org/cores/vga_lcd/   ////
@@ -37,10 +37,10 @@
 
 //  CVS Log
 //
-//  $Id: tests.v,v 1.3 2002-01-28 03:40:29 rherveille Exp $
+//  $Id: tests.v,v 1.4 2002-02-07 05:38:32 rherveille Exp $
 //
-//  $Date: 2002-01-28 03:40:29 $
-//  $Revision: 1.3 $
+//  $Date: 2002-02-07 05:38:32 $
+//  $Revision: 1.4 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
@@ -758,11 +758,11 @@ repeat(10)	@(posedge clk);
 `endif
 
 
-vbl = 2;
-mode = 4;
+vbl = 0;
+mode = 2;
 
 for(vbl=0;vbl<4;vbl=vbl+1)
-//for(mode=0;mode<=4;mode=mode+1)
+for(mode=0;mode<=4;mode=mode+1)
    begin
 
 	m0.wb_wr1( `CTRL,  4'hf, 32'h0);
@@ -1180,6 +1180,22 @@ repeat(10) @(posedge clk);
 
 end
 endtask
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

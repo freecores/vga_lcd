@@ -37,10 +37,10 @@
 
 //  CVS Log
 //
-//  $Id: test_bench_top.v,v 1.3 2002-01-28 03:40:30 rherveille Exp $
+//  $Id: test_bench_top.v,v 1.4 2002-02-07 05:38:32 rherveille Exp $
 //
-//  $Date: 2002-01-28 03:40:30 $
-//  $Revision: 1.3 $
+//  $Date: 2002-02-07 05:38:32 $
+//  $Revision: 1.4 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
@@ -105,6 +105,7 @@ reg		int_warn;
 
 integer		n;
 integer		mode;
+integer delay;
 
 reg	[7:0]	thsync, thgdel;
 reg	[15:0]	thgate, thlen;
@@ -141,7 +142,7 @@ reg	[7:0]	bank;
 
 `define USE_VC		1
 
-parameter	PCLK_C = 13;
+parameter	PCLK_C = 15;
 
 /////////////////////////////////////////////////////////////////////
 //
@@ -170,7 +171,6 @@ initial
 
    	repeat(20)	@(posedge clk);
    	rst = 1;
-	s0.delay = 1;
    	repeat(20)	@(posedge clk);
 
 	// HERE IS WHERE THE TEST CASES GO ...
@@ -184,8 +184,16 @@ if(1)	// Quick Regression Run
    begin
 	//reg_test;
 	//tim_test;
-	//pd1_test;
-	pd2_test;
+
+	delay = 2;
+	for(delay = 0; delay < 3; delay = delay +1)
+	begin
+		$display("Setting wishbone slave delay to %d", delay);
+		s0.delay = delay;
+		//pd1_test;
+		pd2_test;
+	end
+
 	//ur_test;
    end
 else
@@ -520,7 +528,7 @@ assign clk_v = clk;
 // Module Prototype
 
 `ifdef USE_VC
-vga_top #(1'b0, LINE_FIFO_AWIDTH) u0 (
+vga_enh_top #(1'b0, LINE_FIFO_AWIDTH) u0 (
 		.wb_clk_i(		clk		),
 		.wb_rst_i(		1'b0 ),
 		.rst_i(		rst		),
@@ -653,6 +661,15 @@ always @(posedge clk)
 
 endmodule
 */
+
+
+
+
+
+
+
+
+
 
 
 
