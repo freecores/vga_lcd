@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: test_bench_top.v,v 1.7 2003-05-07 09:45:28 rherveille Exp $
+//  $Id: test_bench_top.v,v 1.8 2003-05-07 14:39:19 rherveille Exp $
 //
-//  $Date: 2003-05-07 09:45:28 $
-//  $Revision: 1.7 $
+//  $Date: 2003-05-07 14:39:19 $
+//  $Revision: 1.8 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.7  2003/05/07 09:45:28  rherveille
+//               Numerous updates and added checks
+//
 //               Revision 1.6  2003/03/19 17:22:19  rherveille
 //               Added WISHBONE revB.3 sanity checks
 //
@@ -204,8 +207,12 @@ if(1)	// Quick Regression Run
 //	reg_test;
 //	tim_test;
 
-	pd1_test;
-	pd2_test;
+//	pd1_test;
+//	pd2_test;
+	
+`ifdef VGA_12BIT_DVI
+	dvi_pd_test;
+`endif
 
 //	ur_test;
    end
