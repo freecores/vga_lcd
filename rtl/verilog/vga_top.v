@@ -1,5 +1,5 @@
 //
-// file: vga_top.v
+// file: vga.v
 // project: VGA/LCD controller
 // author: Richard Herveille
 //
@@ -21,8 +21,8 @@ module vga_top (wb_clk_i, wb_rst_i, rst_i, wb_inta_o,
 	//
 	// parameters
 	//
-	parameter LINE_FIFO_AWIDTH = 7;
 	parameter ARST_LVL = 1'b0;
+	parameter LINE_FIFO_AWIDTH = 7;
 
 	//
 	// inputs & outputs
