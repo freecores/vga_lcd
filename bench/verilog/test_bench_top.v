@@ -37,10 +37,10 @@
 
 //  CVS Log
 //
-//  $Id: test_bench_top.v,v 1.2 2001-11-15 07:04:15 rherveille Exp $
+//  $Id: test_bench_top.v,v 1.3 2002-01-28 03:40:30 rherveille Exp $
 //
-//  $Date: 2001-11-15 07:04:15 $
-//  $Revision: 1.2 $
+//  $Date: 2002-01-28 03:40:30 $
+//  $Revision: 1.3 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
@@ -520,7 +520,7 @@ assign clk_v = clk;
 // Module Prototype
 
 `ifdef USE_VC
-vga_top #(LINE_FIFO_AWIDTH, 1'b0) u0 (
+vga_top #(1'b0, LINE_FIFO_AWIDTH) u0 (
 		.wb_clk_i(		clk		),
 		.wb_rst_i(		1'b0 ),
 		.rst_i(		rst		),

@@ -37,10 +37,10 @@
 
 //  CVS Log
 //
-//  $Id: tests.v,v 1.2 2001-11-15 07:04:14 rherveille Exp $
+//  $Id: tests.v,v 1.3 2002-01-28 03:40:29 rherveille Exp $
 //
-//  $Date: 2001-11-15 07:04:14 $
-//  $Revision: 1.2 $
+//  $Date: 2002-01-28 03:40:29 $
+//  $Revision: 1.3 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
@@ -758,37 +758,46 @@ repeat(10)	@(posedge clk);
 `endif
 
 
-vbl = 3;
-mode = 0;
+vbl = 2;
+mode = 4;
 
-//for(vbl=0;vbl<4;vbl=vbl+1)
-//for(mode=0;mode<4;mode=mode+1)
+for(vbl=0;vbl<4;vbl=vbl+1)
+//for(mode=0;mode<=4;mode=mode+1)
    begin
 
 	m0.wb_wr1( `CTRL,  4'hf, 32'h0);
 	repeat(100) @(posedge clk);
 
-	case(mode)
-	   0:
-	     begin
-		cd = 2'h2;
-		pc = 1'b0;
-	     end
-	   1:
-	     begin
-		cd = 2'h0;
-		pc = 1'b0;
-	     end
-	   2:
-	     begin
-		cd = 2'h0;
-		pc = 1'b1;
-	     end
-	   3:
-	     begin
-		cd = 2'h1;
-		pc = 1'b0;
-	     end
+		case(mode)
+		0:
+		begin
+			cd = 2'h2;
+			pc = 1'b0;
+		end
+
+		1:
+		begin
+			cd = 2'h0;
+			pc = 1'b0;
+		end
+
+		2:
+		begin
+			cd = 2'h0;
+			pc = 1'b1;
+		end
+
+		3:
+		begin
+			cd = 2'h1;
+			pc = 1'b0;
+		end
+
+		4:
+		begin
+			cd = 2'h3;
+			pc = 1'b0;
+		end
 	endcase
 
 	m0.wb_wr1( `CTRL,  4'hf, {
@@ -805,7 +814,8 @@ mode = 0;
 				1'b0,	// HIE
 				1'b0,	// VIE
 				1'b1	// Video Enable
-				});
+				}
+	);
 
 bank = 0;
 
@@ -836,118 +846,140 @@ for(bank=0;bank<2;bank=bank+1)
 		pn = l * (thgate + 1) + p;
 
 		case(mode)
-		   0:	// 24 bit/pixel mode
-		   begin
-			pra = pn[31:2] * 3;	// Pixel relative Address
-			paa = pra + vbase;	// Pixel Absolute Address
+			0:	// 24 bit/pixel mode
+			begin
+				pra = pn[31:2] * 3;	// Pixel relative Address
+				paa = pra + vbase;	// Pixel Absolute Address
 
-			// Pixel Data
-			case(pn[1:0])
-			   0:
-			     begin
-				tmp = s0.mem[paa];
-				pd = tmp[31:8];
-			     end
-			   1:
-			     begin
-				tmp = s0.mem[paa];
-				pd[23:16] = tmp[7:0];
-				tmp = s0.mem[paa+1];
-				pd[15:0] = tmp[31:16];
-			     end
-			   2:
-			     begin
-				tmp = s0.mem[paa+1];
-				pd[23:8] = tmp[15:0];
-				tmp = s0.mem[paa+2];
-				pd[7:0] = tmp[31:24];
-			     end
-			   3:
-			     begin
-				tmp = s0.mem[paa+2];
-				pd = tmp[23:0];
-			     end
-			endcase
-		   end
+				// Pixel Data
+				case(pn[1:0])
+					0:
+					begin
+						tmp = s0.mem[paa];
+						pd = tmp[31:8];
+					end
 
-		   1:	// 8 bit/pixel grayscale mode
-		   begin
-			pra = pn[31:2];		// Pixel relative Address
-			paa = pra + vbase;	// Pixel Absolute Address
-			case(pn[1:0])
-			   0:
-			     begin
-				tmp = s0.mem[paa];
-				pd = { tmp[31:24], tmp[31:24], tmp[31:24] };
-			     end
-			   1:
-			     begin
-				tmp = s0.mem[paa];
-				pd = { tmp[23:16], tmp[23:16], tmp[23:16] };
-			     end
-			   2:
-			     begin
-				tmp = s0.mem[paa];
-				pd = { tmp[15:8], tmp[15:8], tmp[15:8] };
-			     end
-			   3:
-			     begin
-				tmp = s0.mem[paa];
-				pd = { tmp[7:0], tmp[7:0], tmp[7:0] };
-			     end
-			endcase
-		   end
+					1:
+					begin
+						tmp = s0.mem[paa];
+						pd[23:16] = tmp[7:0];
+						tmp = s0.mem[paa+1];
+						pd[15:0] = tmp[31:16];
+					end
 
-		   2:	// 8 bit/pixel Pseudo Color mode
-		   begin
-			pra = pn[31:2];		// Pixel relative Address
-			paa = pra + vbase;	// Pixel Absolute Address
-			case(pn[1:0])
-			   0:
-			     begin
-				tmp = s0.mem[paa];
-				tmp = s0.mem[cbase[31:2] + tmp[31:24]];
-				pd = tmp[23:0];
-			     end
-			   1:
-			     begin
-				tmp = s0.mem[paa];
-				tmp = s0.mem[cbase[31:2] + tmp[23:16]];
-				pd = tmp[23:0];
-			     end
-			   2:
-			     begin
-				tmp = s0.mem[paa];
-				tmp = s0.mem[cbase[31:2] + tmp[15:8]];
-				pd = tmp[23:0];
-			     end
-			   3:
-			     begin
-				tmp = s0.mem[paa];
-				tmp = s0.mem[cbase[31:2] + tmp[7:0]];
-				pd = tmp[23:0];
-			     end
-			endcase
-		   end
+					2:
+					begin
+						tmp = s0.mem[paa+1];
+						pd[23:8] = tmp[15:0];
+						tmp = s0.mem[paa+2];
+						pd[7:0] = tmp[31:24];
+					end
 
-		   3:	// 16 bit/pixel mode
-		   begin
-			pra = pn[31:1];		// Pixel relative Address
-			paa = pra + vbase;	// Pixel Absolute Address
-			case(pn[0])
-			   0:
-			     begin
+					3:
+					begin
+						tmp = s0.mem[paa+2];
+						pd = tmp[23:0];
+					end
+				endcase
+			end
+
+			1:	// 8 bit/pixel grayscale mode
+			begin
+				pra = pn[31:2];		// Pixel relative Address
+				paa = pra + vbase;	// Pixel Absolute Address
+
+				case(pn[1:0])
+					0:
+					begin
+						tmp = s0.mem[paa];
+						pd = { tmp[31:24], tmp[31:24], tmp[31:24] };
+					end
+
+					1:
+					begin
+						tmp = s0.mem[paa];
+						pd = { tmp[23:16], tmp[23:16], tmp[23:16] };
+					end
+
+					2:
+					begin
+						tmp = s0.mem[paa];
+						pd = { tmp[15:8], tmp[15:8], tmp[15:8] };
+					end
+
+					3:
+					begin
+						tmp = s0.mem[paa];
+						pd = { tmp[7:0], tmp[7:0], tmp[7:0] };
+					end
+				endcase
+			end
+
+			2:	// 8 bit/pixel Pseudo Color mode
+			begin
+				pra = pn[31:2];		// Pixel relative Address
+				paa = pra + vbase;	// Pixel Absolute Address
+
+				case(pn[1:0])
+					0:
+					begin
+						tmp = s0.mem[paa];
+						tmp = s0.mem[cbase[31:2] + tmp[31:24]];
+						pd = tmp[23:0];
+					end
+
+					1:
+					begin
+						tmp = s0.mem[paa];
+						tmp = s0.mem[cbase[31:2] + tmp[23:16]];
+						pd = tmp[23:0];
+					end
+
+					2:
+					begin
+						tmp = s0.mem[paa];
+						tmp = s0.mem[cbase[31:2] + tmp[15:8]];
+						pd = tmp[23:0];
+					end
+
+					3:
+					begin
+						tmp = s0.mem[paa];
+						tmp = s0.mem[cbase[31:2] + tmp[7:0]];
+						pd = tmp[23:0];
+					end
+				endcase
+			end
+
+			3:	// 16 bit/pixel mode
+			begin
+				pra = pn[31:1];		// Pixel relative Address
+				paa = pra + vbase;	// Pixel Absolute Address
+
+				case(pn[0])
+					0:
+					begin
+						tmp = s0.mem[paa];
+						tmp[15:0] = tmp[31:16];
+						pd = {tmp[15:11], 3'h0, tmp[10:5], 2'h0, tmp[4:0], 3'h0};
+					end
+
+					1:
+					begin
+						tmp = s0.mem[paa];
+						pd = {tmp[15:11], 3'h0, tmp[10:5], 2'h0, tmp[4:0], 3'h0};
+					end
+				endcase
+			end
+
+			4:	// 32 bit/pixel mode
+			begin
+				pra = pn[31:0];		// Pixel relative Address
+				paa = pra + vbase;	// Pixel Absolute Address
+
 				tmp = s0.mem[paa];
-				tmp[15:0] = tmp[31:16];
-				pd = {tmp[15:11], 3'h0, tmp[10:5], 2'h0, tmp[4:0], 3'h0};
-			     end
-			   1:
-			     begin
-				tmp = s0.mem[paa];
-				pd = {tmp[15:11], 3'h0, tmp[10:5], 2'h0, tmp[4:0], 3'h0};
-			     end
-			endcase
-		   end
+				pd = tmp[23:0];
+			end
 
 		endcase
 
@@ -1148,6 +1180,11 @@ repeat(10) @(posedge clk);
 
 end
 endtask
+
+
+
+
+
 
 
 
