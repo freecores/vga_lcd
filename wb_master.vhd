@@ -6,14 +6,17 @@
 -- rev.: 1.1 June  3rd, 2001. Changed address related sections.
 -- rev.: 1.2 June 23nd, 2001. Removed unused "sel_vba", "vmem_offs" and "bl" signals.
 -- rev.: 1.3 July  6th, 2001. Major bug fixes; core did not respond correctly to delayed ACK_I generation.
---
-
--- ToDo: remove multiplier; replace it by simple counters.
+-- rev.: 1.4 July 15th, 2001. Added CLUT bank switching.
+--                            Removed multiplier, replaced it by counters
+--                            Fixed timing bug.
 --
 
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.std_logic_arith.all;
+
+library count;
+use count.count.all;
 
 entity wb_master is
 	port(
@@ -38,17 +41,19 @@ entity wb_master is
 		ctrl_cd : in std_logic_vector(1 downto 0);   -- color depth
 		ctrl_pc : in std_logic;                      -- 8bpp pseudo color/bw
 		ctrl_vbl : in std_logic_vector(1 downto 0);  -- burst length
-		ctrl_bsw : in std_logic;                     -- enable video page switch
+		ctrl_vbsw : in std_logic;                    -- enable video bank switching
+		ctrl_cbsw : in std_logic;                    -- enable clut bank switching
 
 		-- video memory addresses
 		VBAa,                                        -- Video Memory Base Address-A
 		VBAb : in unsigned(31 downto 2);             -- Video Memory Base Address-B
-		CBA : in unsigned(31 downto 2);              -- CLUT Base Address Register
+		CBA : in unsigned(31 downto 11);             -- CLUT Base Address Register
 
-		Thgate : unsigned(15 downto 0);              -- horizontal visible area (in pixels)
-		Tvgate : unsigned(15 downto 0);              -- vertical visible area (in horizontal lines)
-
-		stat_AMP : out std_logic;                    -- active memory page
+		Thgate : in unsigned(15 downto 0);           -- horizontal visible area (in pixels)
+		Tvgate : in unsigned(15 downto 0);           -- vertical visible area (in horizontal lines)
+	
+		stat_AVMP : out std_logic;                   -- active video memory page
+		stat_ACMP : out std_logic;                   -- active color lookup table
 		bs_req : out std_logic;                      -- bank-switch request: memory page switched (when enabled). bs_req is always generated
 
 		-- to/from line fifo
@@ -115,7 +120,8 @@ architecture structural of wb_master is
 	signal clut_req, clut_ack : std_logic;                                   -- clut access request // clut access acknowledge
 	signal clut_offs : unsigned(7 downto 0);                                 -- clut memory offset
 	signal nvmem_req, vmem_ack : std_logic;                                  -- NOT video memory access request // video memory access acknowledge
-	signal pixelbuf_rreq, pixelbuf_empty : std_logic;
+	signal ImDone : std_logic;                                               -- image done
+	signal pixelbuf_rreq, pixelbuf_empty, pixelbuf_flush : std_logic;
 	signal pixelbuf_q : std_logic_vector(31 downto 0);
 	signal RGBbuf_rreq, RGBbuf_wreq, RGBbuf_empty, RGBbuf_full, fill_RGBfifo, RGB_fifo_full : std_logic;
 	signal RGBbuf_d : std_logic_vector(23 downto 0);
@@ -127,11 +133,11 @@ begin
 	--
 	WB_block: block
 		signal burst_cnt : unsigned(2 downto 0);               -- video memory burst access counter
-		signal ImDone, dImDone, burst_done : std_logic;        -- Done reading image from video mem // delayed ImDone // completed burst access to video mem
-		signal sel_VBA : std_logic;                            -- select video memory base address
+		signal dImDone, burst_done : std_logic;                -- Done reading image from video mem // delayed ImDone // completed burst access to video mem
+		signal sel_VBA, sel_CBA : std_logic;                   -- select video memory base address // select clut base address
 		signal vmemA, clutA : unsigned(31 downto 2);           -- video memory address // clut address
-		signal HPix : unsigned(15 downto 0);                   -- number of horizontal pixels (Thgate +1)
-		signal TotPix, PixCnt : unsigned(31 downto 0);         -- total amount of pixels (horizontal pixels * vertical lines) // PixelCounter
+		signal hgate_cnt, vgate_cnt : unsigned(15 downto 0);   -- horizontal / vertical pixel counters
+		signal hdone, vdone : std_logic;                       -- horizontal count done / vertical count done
 	begin
 		--
 		-- wishbone access controller, video memory access request has highest priority (try to keep fifo full)
@@ -155,22 +161,36 @@ begin
 		SINT <= (vmem_acc or clut_acc) and ERR_I; -- Non recoverable error, interrupt host system
 
 		-- select active memory page
-		sel_AMP: process(CLK_I)
+		gen_sel_VBA: process(CLK_I)
 		begin
 			if(CLK_I'event and CLK_I = '1') then
 				if (ctrl_Ven = '0') then
 					sel_VBA <= '0';
-				elsif (ctrl_bsw = '1') then
-					sel_VBA <= sel_VBA xor ImDone; -- select next memory bank when finished reading current bank (and bank switch enabled
+				elsif (ctrl_vbsw = '1') then
+					sel_VBA <= sel_VBA xor ImDone; -- select next video memory bank when finished reading current bank (and bank switch enabled)
 				end if;
 			end if;
-		end process sel_AMP;
-		stat_AMP <= sel_VBA; -- assign output
+		end process gen_sel_VBA;
+		stat_AVMP <= sel_VBA; -- assign output
+
+		gen_sel_CBA: process(CLK_I)
+		begin
+			if(CLK_I'event and CLK_I = '1') then
+				if (ctrl_Ven = '0') then
+					sel_CBA <= '0';
+				elsif (ctrl_Cbsw = '1') then
+					sel_CBA <= sel_CBA xor ImDone; -- select next clut when finished reading current video bank
+				end if;
+			end if;
+		end process gen_sel_CBA;
+		stat_ACMP <= sel_CBA; -- assign output
+
 		bs_req <= ImDone and ctrl_Ven; -- bank switch request
 
 		-- generate burst counter
-		gen_burst_cnt: process(CLK_I, ctrl_vbl)
-			variable bl : unsigned(2 downto 0);
+		gen_burst_cnt: process(CLK_I, ctrl_vbl, burst_cnt)
+			variable bl  : unsigned(2 downto 0);
+			variable val : unsigned(3 downto 0);
 		begin
 			case ctrl_vbl is
 				when "00"   => bl := "000"; -- burst length 1
@@ -179,47 +199,81 @@ begin
 				when others => bl := "111"; -- burst length 8
 			end case;
 
+			val := ('0' & burst_cnt) -1;
+
 			if (CLK_I'event and CLK_I = '1') then
 				if ( ((burst_done = '1') and (vmem_ack = '1')) or (vmem_acc = '0')) then
 					burst_cnt <= bl;
 				elsif (vmem_ack = '1') then
-					burst_cnt <= burst_cnt -1;
+					burst_cnt <= val(2 downto 0);
 				end if;
 			end if;
+
+			burst_done <= val(3);
 		end process gen_burst_cnt;
-		burst_done <= '1' when (burst_cnt = 0) else '0';
 
-		-- generate address
-		gen_nums: process(CLK_I)
+		--
+		-- generate image counters
+		--
+
+		-- hgate counter
+		hgate_count: process(CLK_I, hgate_cnt)
+			variable val : unsigned(16 downto 0);
 		begin
-			if (CLK_I'event and CLK_I = '1') then
-				Hpix <= Thgate +1;                  -- total amount of horizontal pixels
-				TotPix <= Tvgate * Hpix;            -- total amount of pixels in image
+			val := ('0' & hgate_cnt) -1;
 
-				if ((ImDone = '1') or (ctrl_Ven = '0')) then
-					PixCnt <= (others => '0');
-				elsif (vmem_ack = '1') then
-					PixCnt <= PixCnt +1;
+			if (CLK_I'event and CLK_I = '1') then
+				if (ctrl_Ven = '0') then
+					hgate_cnt <= Thgate;
+				elsif (RGBbuf_wreq = '1') then
+					if (hdone = '1') then
+						hgate_cnt <= Thgate;
+					else
+						hgate_cnt <= val(15 downto 0);
+					end if;
 				end if;
 			end if;
-		end process gen_nums;
+
+			hdone <= val(16);
+		end process hgate_count;
+
+		vgate_count: process(CLK_I, vgate_cnt)
+			variable val : unsigned(16 downto 0);
+		begin
+			val := ('0' & vgate_cnt) -1;
+
+			if (CLK_I'event and CLK_I = '1') then
+				if (ctrl_Ven = '0') then
+					vgate_cnt <= Tvgate;
+				elsif ((hdone = '1') and (RGBbuf_wreq = '1')) then
+					if (ImDone = '1') then
+						vgate_cnt <= Tvgate;
+					else
+						vgate_cnt <= val(15 downto 0);
+					end if;
+				end if;
+			end if;
+
+			vdone <= val(16);
+		end process vgate_count;
+
+		ImDone <= hdone and vdone;
 
 		gen_pix_done: process(CLK_I)
 		begin
 			if (CLK_I'event and CLK_I = '1') then
 				if (ctrl_Ven = '0') then
-					ImDone <= '0';
-				elsif ((PixCnt < TotPix) or (ImDone = '1')) then
-					ImDone <= '0';                   -- image not completed
+					dImDone <= '0';
 				else
-					ImDone <= '1';                   -- image completed
+					dImDone <= ImDone;
 				end if;
-
-				dImDone <= ImDone;
 			end if;
 		end process gen_pix_done;
 
-		addr: process(CLK_I, sel_VBA, VBAa, VBAb, CBA, clut_offs)
+		--
+		-- generate addresses
+		--
+		addr: process(CLK_I, sel_VBA, VBAa, VBAb)
 		begin
 			-- select video memory base address
 			if (CLK_I'event and CLK_I = '1') then
@@ -234,10 +288,10 @@ begin
 					vmemA <= vmemA + 1;
 				end if;
 			end if;
-
-			-- calculate CLUT address
-			clutA <= (CBA(31 downto 10) & clut_offs);
 		end process addr;
+
+		-- calculate CLUT address
+		clutA <= (CBA & sel_CBA & clut_offs);
 
 		-- generate wishbone signals
 		gen_wb_sigs: process(CLK_I, nRESET, vmemA, clutA, vmem_acc)
@@ -276,10 +330,11 @@ begin
 
 
 	nVen <= not ctrl_Ven;
+	pixelbuf_flush <= nVen or ImDone;
 
 	-- pixel buffer (temporary store data read from video memory)
 	pixel_buf: FIFO generic map (DEPTH => 16, WIDTH => 32)
-		port map(clk => CLK_I, sclr => nVen, D => DAT_I, wreq => vmem_ack, Q => pixelbuf_q, rreq => pixelbuf_rreq, 
+		port map(clk => CLK_I, sclr => pixelbuf_flush, D => DAT_I, wreq => vmem_ack, Q => pixelbuf_q, rreq => pixelbuf_rreq, 
 						empty => pixelbuf_empty, hfull => nvmem_req);
 
 	-- hookup color processor
@@ -319,6 +374,14 @@ begin
 	line_fifo_wreq <= RGBbuf_rreq;
 
 end architecture structural;
+
+
+
+
+
+
+
+
 
 
 

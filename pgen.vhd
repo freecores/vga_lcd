@@ -2,8 +2,8 @@
 -- File pgen.vhd, Video Pixel Generator
 -- Project: VGA
 -- Author : Richard Herveille
--- rev.: 0.1 April 19th, 2001
---
+-- rev.: 0.1 April 19th, 2001. Initial release
+-- rev.: 1.0 July  15th, 2001. Removed synchronized registers; static settings don't require synchronization.
 --
 --
 
@@ -95,46 +95,19 @@ begin
 	--
 	tblk: block
 		signal nVen : std_logic;                 -- video enable signal (active low)
-		signal sHSyncL : std_logic;              -- horizontal sync pulse polarization level (pos/neg)
-		signal sThsync : unsigned(7 downto 0);   -- horizontal sync pulse width (in pixels)
-		signal sThgdel : unsigned(7 downto 0);   -- horizontal gate delay (in pixels)
-		signal sThgate : unsigned(15 downto 0);  -- horizontal gate (number of visible pixels per line)
-		signal sThlen  : unsigned(15 downto 0);  -- horizontal length (number of pixels per line)
-
-		-- vertical timing settings
-		signal sVSyncL : std_logic;              -- vertical sync pulse polarization level (pos/neg)
-		signal sTvsync : unsigned(7 downto 0);   -- vertical sync width (in lines)
-		signal sTvgdel : unsigned(7 downto 0);   -- vertical gate delay (in lines)
-		signal sTvgate : unsigned(15 downto 0);  -- vertical gate (visible number of lines in frame)
-		signal sTvlen  : unsigned(15 downto 0);  -- vertical length (number of lines in frame)
-
-		signal sCSyncL : std_logic;              -- composite sync pulse polarization level (pos/neg)
-		signal sBlankL : std_logic;              -- blank signal polarization level
 	begin
 		-- synchronize timing/control settings (from master-clock-domain to pixel-clock-domain)
 		sync_settings: process(pclk)
 		begin
 			if (pclk'event and pclk = '1') then
 				nVen    <= not ctrl_Ven;
-				sHSyncL <= ctrl_HSyncL;
-				sThsync <= Thsync;
-				sThgdel <= Thgdel;
-				sThgate <= Thgate;
-				sThlen  <= Thlen;
-				sVSyncL <= ctrl_VSyncL;
-				sTvsync <= Tvsync;
-				sTvgdel <= Tvgdel;
-				sTvgate <= Tvgate;
-				sTvlen  <= Tvlen;
-				sCSyncL <= ctrl_CSyncL;
-				sBlankL <= ctrl_BlankL;
 			end if;
 		end process sync_settings;
 
 		-- hookup video timing generator
-		vtgen: tgen port map (clk => pclk, rst => nVen, HSyncL => sHSyncL, Thsync => sThsync, Thgdel => sThgdel, Thgate => sThgate, Thlen => sThlen,
-												VsyncL => sVsyncL, Tvsync => sTvsync, Tvgdel => sTvgdel, Tvgate => sTvgate, Tvlen => sTvlen, CSyncL => sCSyncL,
-												BlankL => sBlankL, eol => eol, eof => eof, gate => gate, Hsync => Hsync, Vsync => Vsync, Csync => Csync, Blank => Blank);
+		vtgen: tgen port map (clk => pclk, rst => nVen, HSyncL => ctrl_HSyncL, Thsync => Thsync, Thgdel => Thgdel, Thgate => Thgate, Thlen => Thlen,
+										VsyncL => ctrl_VsyncL, Tvsync => Tvsync, Tvgdel => Tvgdel, Tvgate => Tvgate, Tvlen => Tvlen, CSyncL => ctrl_CSyncL,
+										BlankL => ctrl_BlankL, eol => eol, eof => eof, gate => gate, Hsync => Hsync, Vsync => Vsync, Csync => Csync, Blank => Blank);
 	end block tblk;
 	
 	--
@@ -159,4 +132,3 @@ begin
 	end block pblk;
 
 end architecture dataflow;
-

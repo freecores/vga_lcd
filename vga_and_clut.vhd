@@ -5,6 +5,7 @@
 --
 -- rev. 1.0 July  4th, 2001.
 -- rev. 1.1 July 15th, 2001. Changed cycle_shared_memory to csm_pb. The core does not require a CLKx2 clock anymore.
+--                           Added CLUT bank switching
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -18,7 +19,7 @@ entity vga_and_clut is
 		INTA_O  : out std_logic;                        -- interrupt request output
 
 		-- slave signals
-		ADR_I      : in unsigned(9 downto 2);           -- addressbus input (only 32bit databus accesses supported)
+		ADR_I      : in unsigned(10 downto 2);          -- addressbus input (only 32bit databus accesses supported)
 		SDAT_I     : in std_logic_vector(31 downto 0);  -- Slave databus output
 		SDAT_O     : out std_logic_vector(31 downto 0); -- Slave databus input
 		SEL_I      : in std_logic_vector(3 downto 0);   -- byte select inputs
@@ -131,7 +132,7 @@ architecture structural of vga_and_clut is
 	--
 	-- Signal declarations
 	--
-	signal CBA : unsigned(31 downto 10); -- color lookup table base address
+	signal CBA : unsigned(31 downto 11); -- color lookup table base address
 
 	signal vga_clut_acc : std_logic; -- vga access to color lookup table
 	
@@ -158,12 +159,12 @@ begin
 			if (RST_I = '1') then
 				CBA <= (others  => '0');
 			elsif ( (SEL_I = "1111") and (CYC_I = '1') and (VGA_STB_I = '1') and (WE_I = '1') and (std_logic_vector(ADR_I(4 downto 2)) = "111") ) then
-				CBA <= unsigned(SDAT_I(31 downto 10));
+				CBA <= unsigned(SDAT_I(31 downto 11));
 			end if;
 		end if;
 	end process;
 
-	vga_clut_acc <= '1' when (vga_adr_o(31 downto 10) = CBA) else '0';
+	vga_clut_acc <= '1' when (vga_adr_o(31 downto 11) = CBA) else '0';
 
 
 	--
@@ -181,11 +182,11 @@ begin
 	--
 	empty_data <= (others => '0');
 	u2: csm_pb 
-			generic map (DWIDTH => 24, AWIDTH => 8)
+			generic map (DWIDTH => 24, AWIDTH => 9)
 			port map (CLK_I => CLK_I, RST_I => RST_I, nRESET => nReset,
-				ADR0_I => vga_adr_o(9 downto 2), DAT0_I => empty_data, DAT0_O => mem0_dat_o, SEL0_I => vga_sel_o(2 downto 0), 
+				ADR0_I => vga_adr_o(10 downto 2), DAT0_I => empty_data, DAT0_O => mem0_dat_o, SEL0_I => vga_sel_o(2 downto 0), 
 				WE0_I => vga_we_o, STB0_I => vga_stb_o, CYC0_I => vga_cyc_o, ACK0_O => mem0_ack_o, ERR0_O => mem0_err_o,
-				ADR1_I => ADR_I(9 downto 2), DAT1_I => SDAT_I(23 downto 0), DAT1_O => mem1_dat_o, SEL1_I => SEL_I(2 downto 0),
+				ADR1_I => ADR_I(10 downto 2), DAT1_I => SDAT_I(23 downto 0), DAT1_O => mem1_dat_o, SEL1_I => SEL_I(2 downto 0),
 				WE1_I => WE_I, STB1_I => CLUT_STB_I, CYC1_I => CYC_I, ACK1_O => mem1_ack_o, ERR1_O => mem1_err_o);
 	
 	--
@@ -208,5 +209,4 @@ begin
 	ACK_O  <= mem1_ack_o when (CLUT_STB_I = '1') else vga_ack_o;
 	ERR_O  <= mem1_err_o when (CLUT_STB_I = '1') else vga_err_o;
 end architecture structural;
-
 

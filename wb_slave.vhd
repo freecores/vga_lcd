@@ -2,9 +2,9 @@
 -- file: wb_slave.vhd
 -- project: VGA/LCD controller
 -- author: Richard Herveille
--- rev 1.0 may 10th 2001
--- rev 1.1 june 3rd 2001. Changed WISHBONE ADR_I. Addresses are defined as byte-oriented, instead of databus independent.
---
+-- rev 1.0 May  10th, 2001
+-- rev 1.1 June  3rd, 2001. Changed WISHBONE ADR_I. Addresses are defined as byte-oriented, instead of databus independent.
+-- rev 1.2 July 15th, 2001. Added CLUT bank switching.
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -27,18 +27,20 @@ entity wb_slave is
 		INTA_O : out std_logic;
 
 		-- control register settings
-		BL : out std_logic;
-		CSL : out std_logic;
-		VSL : out std_logic;
-		HSL : out std_logic;
-		PC : out std_logic;
-		CD : out std_logic_vector(1 downto 0);
-		VBL : out std_logic_vector(1 downto 0);
-		BSW : out std_logic;
-		Ven : out std_logic;
+		BL   : out std_logic;		                  -- blanking level
+		CSL  : out std_logic;                    -- composite sync level
+		VSL  : out std_logic;                    -- vsync level
+		HSL  : out std_logic;                    -- hsync level
+		PC   : out std_logic;                    -- pseudo color
+ 		CD   : out std_logic_vector(1 downto 0); -- color depth
+		VBL  : out std_logic_vector(1 downto 0); -- burst length
+		CBSW : out std_logic;                    -- clut bank switching enable
+		VBSW : out std_logic;                    -- video page bank switching enable
+		Ven  : out std_logic;                    -- video system enable
 
 		-- status register inputs
-		AMP : in std_logic; -- active memory page
+		AVMP,                -- active video memory page
+		ACMP : in std_logic; -- active clut page
 		bsint_in,
 		hint_in,
 		vint_in,
@@ -58,8 +60,8 @@ entity wb_slave is
 		Tvlen : out unsigned(15 downto 0);
 
 		VBARa,
-		VBARb,
-		CBAR : buffer unsigned(31 downto 2)
+		VBARb : buffer unsigned(31 downto  2);
+		CBAR  : buffer unsigned(31 downto 11)
 );
 end entity wb_slave;
 
@@ -103,7 +105,7 @@ begin
 					when "100" => hvlen <= DAT_I;
 					when "101" => VBARa <= unsigned(DAT_I(31 downto 2));
 					when "110" => VBARb <= unsigned(DAT_I(31 downto 2));
-					when "111" => CBAR <= (unsigned(DAT_I(31 downto 10)) & "00000000");
+					when "111" => CBAR  <= unsigned(DAT_I(31 downto 11));
 
 					when others => null; -- should never happen
 				end case;
@@ -120,12 +122,13 @@ begin
 			if (RST_I = '1') then
 				stat <= (others => '0');
 			else
-				stat(16) <= AMP;
-				stat(6) <= bsint_in or (stat(6) and not (reg_acc and WE_I and DAT_I(6)) );
-				stat(5) <= hint_in  or (stat(5) and not (reg_acc and WE_I and DAT_I(5)) );
-				stat(4) <= vint_in  or (stat(4) and not (reg_acc and WE_I and DAT_I(4)) );
-				stat(1) <= luint_in or (stat(1) and not (reg_acc and WE_I and DAT_I(1)) );
-				stat(0) <= sint_in  or (stat(0) and not (reg_acc and WE_I and DAT_I(0)) );
+				stat(17) <= ACMP;
+				stat(16) <= AVMP;
+				stat( 6) <= bsint_in or (stat(6) and not (reg_acc and WE_I and DAT_I(6)) );
+				stat( 5) <= hint_in  or (stat(5) and not (reg_acc and WE_I and DAT_I(5)) );
+				stat( 4) <= vint_in  or (stat(4) and not (reg_acc and WE_I and DAT_I(4)) );
+				stat( 1) <= luint_in or (stat(1) and not (reg_acc and WE_I and DAT_I(1)) );
+				stat( 0) <= sint_in  or (stat(0) and not (reg_acc and WE_I and DAT_I(0)) );
 			end if;
 		end if;
 	end process gen_stat;
@@ -138,7 +141,8 @@ begin
 	PC   <= ctrl(11);
 	CD   <= ctrl(10 downto 9);
 	VBL  <= ctrl(8 downto 7);
-	BSW  <= ctrl(4);
+	CBSW <= ctrl(5);
+	VBSW <= ctrl(4);
 	BSIE <= ctrl(3);
 	HIE  <= ctrl(2);
 	VIE  <= ctrl(1);
@@ -173,7 +177,7 @@ begin
 		         hvlen when "100",
 		         std_logic_vector(VBARa & "00") when "101",
 		         std_logic_vector(VBARb & "00") when "110",
-		         std_logic_vector(CBAR & "00")  when others;
+		         std_logic_vector(CBAR & ACMP & "0000000000")  when others;
 
 	-- generate interrupt request signal
 	INTA_O <= (HINT and HIE) or (VINT and VIE) or (BSINT and BSIE) or LUINT or SINT;

@@ -314,10 +314,3 @@ begin
 	end process gen_colcnt;
 
 end architecture structural;
-
-
-
-
-
-
-

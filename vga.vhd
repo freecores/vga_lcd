@@ -6,7 +6,7 @@
 -- rev 1.0 May  10th, 2001
 -- rev 1.1 June  3th, 2001. Changed WISHBONE addresses. Addresses are byte oriented, instead of databus-independent
 -- rev 1.2 June 29th, 2001. Many hanges in design to reflect changes in fifo's. Design now correctly maps to Xilinx-BlockRAMs.
---
+-- rev 1.3 July 15th, 2001. Added CLUT bank switching
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -98,25 +98,25 @@ architecture dataflow of vga is
 		INTA_O : out std_logic;
 
 		-- control register settings
-		BL : out std_logic;
-		CSL : out std_logic;
-		VSL : out std_logic;
-		HSL : out std_logic;
-		PC : out std_logic;
-		CD : out std_logic_vector(1 downto 0);
-		VBL : out std_logic_vector(1 downto 0);
-		BSW : out std_logic;
-		Ven : out std_logic;
+		BL   : out std_logic;		                  -- blanking level
+		CSL  : out std_logic;                    -- composite sync level
+		VSL  : out std_logic;                    -- vsync level
+		HSL  : out std_logic;                    -- hsync level
+		PC   : out std_logic;                    -- pseudo color
+ 		CD   : out std_logic_vector(1 downto 0); -- color depth
+		VBL  : out std_logic_vector(1 downto 0); -- burst length
+		CBSW : out std_logic;                    -- clut bank switching enable
+		VBSW : out std_logic;                    -- video page bank switching enable
+		Ven  : out std_logic;                    -- video system enable
 
 		-- status register inputs
-		AMP : in std_logic; -- active memory page
-
-		-- interrupt signals
-		bsint_in,                                    -- bank switch interrupt
-		hint_in,                                     -- horizontal sync. interrupt
-		vint_in,                                     -- vertical sync. interrupt
-		luint_in,                                    -- line-fifo under-run (no more data in fifo)
-		sint_in : in std_logic;                      -- Serious System interrupt (fault during memory read)
+		AVMP,                -- active video memory page
+		ACMP : in std_logic; -- active clut page
+		bsint_in,
+		hint_in,
+		vint_in,
+		luint_in,
+		sint_in : in std_logic; -- interrupt request signals
 
 		-- Horizontal Timing Register
 		Thsync : out unsigned(7 downto 0);
@@ -131,8 +131,8 @@ architecture dataflow of vga is
 		Tvlen : out unsigned(15 downto 0);
 
 		VBARa,
-		VBARb,
-		CBAR : buffer unsigned(31 downto 2)
+		VBARb : buffer unsigned(31 downto  2);
+		CBAR  : buffer unsigned(31 downto 11)
 	);
 	end component wb_slave;
 
@@ -160,18 +160,20 @@ architecture dataflow of vga is
 		ctrl_cd : in std_logic_vector(1 downto 0);   -- color depth
 		ctrl_pc : in std_logic;                      -- 8bpp pseudo color/bw
 		ctrl_vbl : in std_logic_vector(1 downto 0);  -- burst length
-		ctrl_bsw : in std_logic;                     -- enable video page switch
+		ctrl_vbsw : in std_logic;                    -- enable video bank switching
+		ctrl_cbsw : in std_logic;                    -- enable clut bank switching
 
 		-- video memory addresses
 		VBAa,                                        -- Video Memory Base Address-A
 		VBAb : in unsigned(31 downto 2);             -- Video Memory Base Address-B
-		CBA : in unsigned(31 downto 2);              -- CLUT Base Address Register
+		CBA : in unsigned(31 downto 11);             -- CLUT Base Address Register
 
 		Thgate : unsigned(15 downto 0);              -- horizontal visible area (in pixels)
 		Tvgate : unsigned(15 downto 0);              -- vertical visible area (in horizontal lines)
 
-		stat_AMP : out std_logic;                    -- active memory page
-		bs_req : out std_logic;
+		stat_AVMP : out std_logic;                   -- active video memory page
+		stat_ACMP : out std_logic;                   -- active color lookup table
+		bs_req : out std_logic;                      -- bank-switch request: memory page switched (when enabled). bs_req is always generated
 
 		-- to/from line fifo
 		line_fifo_wreq : out std_logic;
@@ -223,14 +225,15 @@ architecture dataflow of vga is
 	--
 
 	-- from wb_slave
-	signal ctrl_bl, ctrl_csl, ctrl_vsl, ctrl_hsl, ctrl_pc, ctrl_bsw, ctrl_ven : std_logic;
+	signal ctrl_bl, ctrl_csl, ctrl_vsl, ctrl_hsl, ctrl_pc, ctrl_cbsw, ctrl_vbsw, ctrl_ven : std_logic;
 	signal ctrl_cd, ctrl_vbl : std_logic_vector(1 downto 0);
 	signal Thsync, Thgdel, Tvsync, Tvgdel : unsigned(7 downto 0);
 	signal Thgate, Thlen, Tvgate, Tvlen : unsigned(15 downto 0);
-	signal VBARa, VBARb, CBAR : unsigned(31 downto 2);
+	signal VBARa, VBARb : unsigned(31 downto 2);
+	signal CBAR : unsigned(31 downto 11);
 
 	-- to wb_slave
-	signal stat_amp, bsint, hint, vint, luint, sint : std_logic;
+	signal stat_avmp, stat_acmp, bsint, hint, vint, luint, sint : std_logic;
 
 	-- from wb_master
 	signal line_fifo_wreq : std_logic;
@@ -248,27 +251,25 @@ begin
 
 	-- hookup wishbone slave
 	u1: wb_slave port map (CLK_I => CLK_I, RST_I => RST_I, nRESET => nRESET, ADR_I => ADR_I, DAT_I => SDAT_I, DAT_O => SDAT_O,
-										SEL_I => SEL_I, WE_I => WE_I, STB_I => STB_I, CYC_I => CYC_I, ACK_O => ACK_O, ERR_O => ERR_O, INTA_O => INTA_O,
-										BL => ctrl_bl, csl => ctrl_csl, vsl => ctrl_vsl, hsl => ctrl_hsl, pc => ctrl_pc, cd => ctrl_cd, 
-										vbl => ctrl_vbl, bsw => ctrl_bsw, ven => ctrl_ven, 
-										amp => stat_amp, bsint_in => bsint, hint_in => hint, vint_in => vint, luint_in => luint, sint_in => sint,
-										Thsync => Thsync, Thgdel => Thgdel, Thgate => Thgate, Thlen => Thlen,
-										Tvsync => Tvsync, Tvgdel => Tvgdel, Tvgate => Tvgate, Tvlen => Tvlen,
-										VBARa => VBARa, VBARb => VBARb, CBAR => CBAR);
+			SEL_I => SEL_I, WE_I => WE_I, STB_I => STB_I, CYC_I => CYC_I, ACK_O => ACK_O, ERR_O => ERR_O, INTA_O => INTA_O,
+			BL => ctrl_bl, csl => ctrl_csl, vsl => ctrl_vsl, hsl => ctrl_hsl, pc => ctrl_pc, cd => ctrl_cd, vbl => ctrl_vbl, 
+			cbsw => ctrl_cbsw, vbsw => ctrl_vbsw, ven => ctrl_ven, acmp => stat_acmp, avmp => stat_avmp, bsint_in => bsint, 
+			hint_in => hint, vint_in => vint, luint_in => luint, sint_in => sint, Thsync => Thsync, Thgdel => Thgdel, 
+			Thgate => Thgate, Thlen => Thlen,	Tvsync => Tvsync, Tvgdel => Tvgdel, Tvgate => Tvgate, Tvlen => Tvlen,
+			VBARa => VBARa, VBARb => VBARb, CBAR => CBAR);
 
 	-- hookup wishbone master
 	u2: wb_master port map (CLK_I => CLK_I, RST_I => RST_I, nReset => nReset, CYC_O => CYC_O, STB_O => STB_O, CAB_O => CAB_O, WE_O => WE_O,
-										ADR_O => ADR_O, SEL_O => SEL_O, ACK_I => ACK_I, ERR_I => ERR_I, DAT_I => MDAT_I, SINT => sint,
-										ctrl_Ven => ctrl_ven, ctrl_cd => ctrl_cd, ctrl_pc => ctrl_pc, ctrl_vbl => ctrl_vbl, ctrl_bsw => ctrl_bsw,
-										VBAa => VBARa, VBAb => VBARb, CBA => CBAR, Thgate => Thgate, Tvgate => Tvgate, stat_AMP => stat_AMP, bs_req => bsint,
-										line_fifo_wreq => line_fifo_wreq, line_fifo_d => line_fifo_d, line_fifo_full => line_fifo_full_wr);
+			ADR_O => ADR_O, SEL_O => SEL_O, ACK_I => ACK_I, ERR_I => ERR_I, DAT_I => MDAT_I, SINT => sint,
+			ctrl_Ven => ctrl_ven, ctrl_cd => ctrl_cd, ctrl_pc => ctrl_pc, ctrl_vbl => ctrl_vbl, ctrl_cbsw => ctrl_cbsw, ctrl_vbsw => ctrl_vbsw,
+			VBAa => VBARa, VBAb => VBARb, CBA => CBAR, Thgate => Thgate, Tvgate => Tvgate, stat_acmp => stat_acmp, stat_AVMP => stat_avmp, 
+			bs_req => bsint,	line_fifo_wreq => line_fifo_wreq, line_fifo_d => line_fifo_d, line_fifo_full => line_fifo_full_wr);
 
 	-- hookup pixel and video timing generator
 	u3: pgen port map (mclk => CLK_I, pclk => pclk, ctrl_Ven => ctrl_ven, 
-									ctrl_HSyncL => ctrl_hsl, Thsync => Thsync, Thgdel => Thgdel, Thgate => Thgate, Thlen => Thlen,
-									ctrl_VSyncL => ctrl_vsl, Tvsync => Tvsync, Tvgdel => Tvgdel, Tvgate => Tvgate, Tvlen => Tvlen,
-									ctrl_CSyncL => ctrl_csl, ctrl_BlankL => ctrl_bl, eoh => hint, eov => vint, gate => cgate,
-									Hsync => ihsync, Vsync => ivsync, Csync => icsync, Blank => iblank);
+			ctrl_HSyncL => ctrl_hsl, Thsync => Thsync, Thgdel => Thgdel, Thgate => Thgate, Thlen => Thlen, ctrl_VSyncL => ctrl_vsl, 
+			Tvsync => Tvsync, Tvgdel => Tvgdel, Tvgate => Tvgate, Tvlen => Tvlen, ctrl_CSyncL => ctrl_csl, ctrl_BlankL => ctrl_bl,
+			eoh => hint, eov => vint, gate => cgate, Hsync => ihsync, Vsync => ivsync, Csync => icsync, Blank => iblank);
 
 	-- delay video control signals 1 clock cycle (dual clock fifo synchronizes output)
 	del_video_sigs: process(pclk)
@@ -310,6 +311,9 @@ begin
 	end block luint_blk;
 
 end architecture dataflow;
+
+
+
 
 
 
