@@ -37,10 +37,10 @@
 
 //  CVS Log
 //
-//  $Id: tests.v,v 1.4 2002-02-07 05:38:32 rherveille Exp $
+//  $Id: tests.v,v 1.5 2002-04-20 09:57:55 rherveille Exp $
 //
-//  $Date: 2002-02-07 05:38:32 $
-//  $Revision: 1.4 $
+//  $Date: 2002-04-20 09:57:55 $
+//  $Revision: 1.5 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
@@ -181,113 +181,113 @@ for(mode=0;mode<6;mode=mode+1)
 	$display("Mode: %0d", mode);
 
 	case(mode)
-	   0:
-	   begin
-		thsync = 0;
-		thgdel = 0;
-		thgate = 340;
-		thlen = 345;
+		0:
+		begin
+			thsync = 0;
+			thgdel = 0;
+			thgate = 340;
+			thlen = 345;
 
-		tvsync = 0;
-		tvgdel = 0;
-		tvgate = 240;
-		tvlen = 245;
+			tvsync = 0;
+			tvgdel = 0;
+			tvgate = 240;
+			tvlen = 245;
 
-		hpol = 0;
-		vpol = 0;
-		cpol = 0;
-		bpol = 0;
-	   end
+			hpol = 0;
+			vpol = 0;
+			cpol = 0;
+			bpol = 0;
+		end
 
-	   1:
-	   begin
-		thsync = 18;
-		thgdel = 18;
-		thgate = 340;
-		thlen = 390;
+		1:
+		begin
+			thsync = 18;
+			thgdel = 18;
+			thgate = 340;
+			thlen = 390;
 
-		tvsync = 18;
-		tvgdel = 18;
-		tvgate = 240;
-		tvlen = 290;
+			tvsync = 18;
+			tvgdel = 18;
+			tvgate = 240;
+			tvlen = 290;
 
-		hpol = 1;
-		vpol = 0;
-		cpol = 0;
-		bpol = 0;
-	   end
+			hpol = 1;
+			vpol = 0;
+			cpol = 0;
+			bpol = 0;
+		end
 
-	   2:
-	   begin
-		thsync = 1;
-		thgdel = 1;
-		thgate = 640;
-		thlen = 643;
+		2:
+		begin
+			thsync = 1;
+			thgdel = 1;
+			thgate = 640;
+			thlen = 643;
 
-		tvsync = 1;
-		tvgdel = 1;
-		tvgate = 480;
-		tvlen = 483;
+			tvsync = 1;
+			tvgdel = 1;
+			tvgate = 480;
+			tvlen = 483;
 
-		hpol = 0;
-		vpol = 1;
-		cpol = 0;
-		bpol = 0;
-	   end
+			hpol = 0;
+			vpol = 1;
+			cpol = 0;
+			bpol = 0;
+		end
 
-	   3:
-	   begin
-		thsync = 0;
-		thgdel = 2;
-		thgate = 800;
-		thlen = 804;
+		3:
+		begin
+			thsync = 0;
+			thgdel = 2;
+			thgate = 800;
+			thlen = 804;
 
-		tvsync = 0;
-		tvgdel = 2;
-		tvgate = 600;
-		tvlen = 604;
+			tvsync = 0;
+			tvgdel = 2;
+			tvgate = 600;
+			tvlen = 604;
 
-		hpol = 0;
-		vpol = 0;
-		cpol = 1;
-		bpol = 0;
-	   end
+			hpol = 0;
+			vpol = 0;
+			cpol = 1;
+			bpol = 0;
+		end
 
-	   4:
-	   begin
-		thsync = 3;
-		thgdel = 2;
-		thgate = 800;
-		thlen = 806;
+		4:
+		begin
+			thsync = 3;
+			thgdel = 2;
+			thgate = 800;
+			thlen = 806;
 
-		tvsync = 2;
-		tvgdel = 2;
-		tvgate = 600;
-		tvlen = 606;
+			tvsync = 2;
+			tvgdel = 2;
+			tvgate = 600;
+			tvlen = 606;
 
-		hpol = 0;
-		vpol = 0;
-		cpol = 0;
-		bpol = 1;
-	   end
+			hpol = 0;
+			vpol = 0;
+			cpol = 0;
+			bpol = 1;
+		end
 
-	   5:
-	   begin
-		thsync = 6;
-		thgdel = 2;
-		thgate = 800;
-		thlen = 810;
+		5:
+		begin
+			thsync = 6;
+			thgdel = 2;
+			thgate = 800;
+			thlen = 810;
 
-		tvsync = 4;
-		tvgdel = 2;
-		tvgate = 600;
-		tvlen = 607;
+			tvsync = 4;
+			tvgdel = 2;
+			tvgate = 600;
+			tvlen = 607;
 
-		hpol = 1;
-		vpol = 1;
-		cpol = 1;
-		bpol = 1;
-	   end
+			hpol = 1;
+			vpol = 1;
+			cpol = 1;
+			bpol = 1;
+		end
 	endcase
 
 /*
@@ -515,7 +515,7 @@ repeat(10)	@(posedge clk);
 	repeat(2) @(posedge vsync);
 
 	// For Each Line
-	for(l=0;l<tvgate+1;l=l+1)
+	for(l=0;l<tvgate;l=l+1)
 	// For each Pixel
 	for(p=0;p<thgate+1;p=p+1)
 	   begin
@@ -707,7 +707,8 @@ $display("*****************************************************\n");
 
 	tvsync = 1;
 	tvgdel = 8;
-	tvgate = 239;
+//	tvgate = 239;
+	tvgate = 240;
 	tvlen = 280;
 
 /*
@@ -759,7 +760,7 @@ repeat(10)	@(posedge clk);
 
 
 vbl = 0;
-mode = 2;
+mode = 1;
 
 for(vbl=0;vbl<4;vbl=vbl+1)
 for(mode=0;mode<=4;mode=mode+1)
@@ -828,7 +829,8 @@ for(bank=0;bank<2;bank=bank+1)
 
 	error_cnt=0;
 	// For Each Line
-	for(l=0;l<tvgate+1;l=l+1)
+//	for(l=0;l<tvgate+1;l=l+1)
+	for(l=0; l<tvgate;l=l+1)
 	// For each Pixel
 	for(p=0;p<thgate+1;p=p+1)
 	   begin
@@ -1180,6 +1182,19 @@ repeat(10) @(posedge clk);
 
 end
 endtask
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
