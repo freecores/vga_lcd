@@ -3,8 +3,10 @@
 -- project: VGA/LCD controller
 -- author: Richard Herveille
 --
--- rev 1.0 may 10th 2001
--- rev 1.1 june 3th 2001. Changed WISHBONE addresses. Addresses are byte oriented, instead of databus-independent
+-- rev 1.0 May  10th, 2001
+-- rev 1.1 June  3th, 2001. Changed WISHBONE addresses. Addresses are byte oriented, instead of databus-independent
+-- rev 1.2 June 29th, 2001. Many hanges in design to reflect changes in fifo's. Design now correctly maps to Xilinx-BlockRAMs.
+--
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -237,7 +239,7 @@ architecture dataflow of vga is
 	-- from pixel generator
 	signal cgate : std_logic; -- composite gate signal
 	signal ihsync, ivsync, icsync, iblank : std_logic; -- intermediate horizontal/vertical/composite sync, intermediate blank
-	signal dhsync, dvsync, dcsync, dblank : std_logic; -- delayed intermedates (needed for fifo synchronization)
+--	signal dhsync, dvsync, dcsync, dblank : std_logic; -- delayed intermedates (needed for fifo synchronization)
 
 	-- from line fifo
 	signal line_fifo_full_wr, line_fifo_empty_rd : std_logic;
@@ -272,17 +274,10 @@ begin
 	del_video_sigs: process(pclk)
 	begin
 		if (pclk'event and pclk = '1') then
-			dhsync <= ihsync;
-			HSYNC  <= dhsync;
-
-			dvsync <= ivsync;
-			VSYNC  <= dvsync;
-
-			dcsync <= icsync;
-			CSYNC  <= dcsync;
-
-			dblank <= iblank;
-			BLANK  <= dblank;
+			HSYNC  <= ihsync;
+			VSYNC  <= ivsync;
+			CSYNC  <= icsync;
+			BLANK  <= iblank;
 		end if;
 	end process del_video_sigs;
 
@@ -315,5 +310,6 @@ begin
 	end block luint_blk;
 
 end architecture dataflow;
+
 
 

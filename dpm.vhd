@@ -6,8 +6,9 @@
 --       fifo_dc uses this entity to implement the dual ported RAM of the fifo.
 --       Change this file to implement target specific RAM blocks.
 --
--- rev.
-
+-- rev. 0.2 June 29th, 2001. Changed "std_logic_vector(23 downto 0)" into "std_logic_vector(DWIDTH -1 downto 0)" for 'dout'.
+--                           Removed rreq input. Removed obsolete "dout" signal
+--                           The design now correctly maps to Altera-EABs and Xilinx-BlockRAMs
 
 --
 -- dual ported memory, wrapper for target specific RAM blocks
@@ -31,8 +32,7 @@ entity dual_ported_memory is
 		wreq : in std_logic;                          -- write request
 
 		Q : out std_logic_vector(DWIDTH -1 downto 0); -- Data output
-		raddr : in unsigned(AWIDTH -1 downto 0);      -- read clock address input
-		rreq : in std_logic                           -- read request
+		raddr : in unsigned(AWIDTH -1 downto 0)       -- read clock address input
 	);
 end entity dual_ported_memory;
 
@@ -52,12 +52,11 @@ architecture structural of dual_ported_memory is
 		DOUT   : out std_logic_vector(23 downto 0)    -- data output (asynchronous)
 	);
 	end component VSR256X24M2;
-	signal nrreq, nwreq : std_logic;
+--	signal nrreq, nwreq : std_logic;
 
 	-- generate memory for generic description
 	type mem_type is array (2**AWIDTH -1 downto 0) of std_logic_vector(DWIDTH -1 downto 0);
 	signal mem : mem_type;
-	signal dout : std_logic_vector(23 downto 0);
 
 begin
 	--
@@ -79,9 +78,7 @@ begin
 	read_mem: process(rclk)
 	begin
 		if (rclk'event and rclk = '1') then
-			if (rreq = '1') then
-				dout <= mem(conv_integer(raddr));
-			end if;
+			Q <= mem(conv_integer(raddr));
 		end if;
 	end process read_mem;
 
@@ -92,22 +89,6 @@ begin
 --	nwreq <= not wreq;
 --	u1: VSR256X24M2 port map(RCK => rclk, REN => nrreq, RADR => std_logic_vector(raddr),
 --											WCK => wclk, WEN => nwreq, WADR => std_logic_vector(waddr),
---											DI => D, DOUT => dout);
-
-
-	-- common process for generic and implementation specific memory
-	-- synchronize dout to read clock
-	synch_dout: process(rclk)
-	begin
-		if (rclk'event and rclk = '1') then
-			Q <=dout;
-		end if;
-	end process synch_dout;
+--											DI => D, DOUT => Q);
 
 end architecture structural;
-
-
-
-
-
-

@@ -4,6 +4,8 @@
 -- rev.: 0.1 May 04th, 2001
 -- rev.: 0.2 June 16th, 2001. Changed "function bitcount" until it compiled under Xilinx Webpack
 -- rev.: 0.3 June 23nd, 2001. Removed unused "dummy" variable from function bitcount.
+-- rev.: 1.0 June 29th, 2001. Synchronized Q output. Design now correctly maps to Xilinx-BlockRAMs
+--
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -113,9 +115,9 @@ begin
 			if (wreq = '1') then
 				mem(conv_integer(wptr)) <= D; -- store D in memory array
 			end if;
+			Q <= mem(conv_integer(rptr));    -- assign output
 		end if;
 	end process gen_mem;
-	Q <= mem(conv_integer(rptr));    -- assign output
 
 	-- number of words in fifo
 	gen_fifo_cnt: process(clk, aclr, fifo_cnt, wreq, rreq)

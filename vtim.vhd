@@ -4,7 +4,7 @@
 -- Author : Richard Herveille
 -- rev.: 0.1 April 13th, 2001
 -- rev.: 0.2 June  23nd, 2001. Removed unused "rst_strb" signal.
---
+-- rev.: 0.3 June  29th, 2001. Changed 'gen_go' process to use clock-enable signal.
 --
 
 library ieee;
@@ -39,8 +39,13 @@ begin
 	gen_go: process(clk)
 	begin
 		if (clk'event and clk = '1') then
-			drst <= rst;
-			go <= Dlen or (not rst and drst);
+			if (rst = '1') then
+				go <= '0';
+				drst <= '1';
+			elsif (ena = '1') then
+				go <= Dlen or (not rst and drst);
+				drst <= rst;
+			end if;
 		end if;
 	end process gen_go;
 --	go <= Dlen or (not rst and drst); does not work => horizontal Dlen counter does not reload
@@ -97,3 +102,6 @@ begin
 
 	Done <= Dlen;
 end architecture structural;
+
+
+

@@ -8,6 +8,7 @@
 --                   CHANGE "DPM.VHD" FOR TARGET SPECIFIC MEMORY BLOCKS
 --
 -- rev. 1.1: June 23nd, 2001. Removed unused "drptr" and "fifo_cnt" signals
+-- rev. 1.2: June 29th, 2001. Changed core to reflect changes in "dpm.vhd".
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -51,8 +52,7 @@ architecture structural of FIFO_DC is
 
 		rclk : in std_logic;                          -- read clock input
 		Q : out std_logic_vector(DWIDTH -1 downto 0); -- Data output
-		raddr : in unsigned(AWIDTH -1 downto 0);      -- read clock address input
-		rreq : in std_logic                           -- read request
+		raddr : in unsigned(AWIDTH -1 downto 0)       -- read clock address input
 	);
 	end component dual_ported_memory;
 
@@ -105,7 +105,7 @@ begin
 
 	-- insert memory block. dual_ported_memory is a wrapper around a target specific dual ported RAM
 	mem: dual_ported_memory generic map(AWIDTH => AWIDTH, DWIDTH => DWIDTH)
-		port map(wclk => wclk, D => D, waddr => wptr, wreq => wreq, rclk => rclk, Q => Q, raddr => rptr, rreq => rreq);
+		port map(wclk => wclk, D => D, waddr => wptr, wreq => wreq, rclk => rclk, Q => Q, raddr => rptr);
 
 	--
 	-- status flags

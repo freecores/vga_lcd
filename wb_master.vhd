@@ -321,6 +321,3 @@ begin
 	line_fifo_wreq <= RGBbuf_rreq;
 
 end architecture structural;
-
-
-
