@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: sync_check.v,v 1.2 2001-11-15 07:04:15 rherveille Exp $
+//  $Id: sync_check.v,v 1.3 2003-03-19 12:20:53 rherveille Exp $
 //
-//  $Date: 2001-11-15 07:04:15 $
-//  $Revision: 1.2 $
+//  $Date: 2003-03-19 12:20:53 $
+//  $Revision: 1.3 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.2  2001/11/15 07:04:15  rherveille
+//               Updated testbench for VGA/LCD Core version 2.0
+//
 //
 //
 //
@@ -103,10 +106,10 @@ parameter	clk_time = 40;
 
 assign hcheck = enable;
 assign vcheck = enable;
-assign hhtime_exp = (thsync + 1) * clk_time;
-assign htime_exp  = (thlen + 2) * clk_time;
-assign vhtime_exp = (htime_exp * (tvsync + 1));
-assign vtime_exp  = htime_exp * (tvlen+2);
+assign hhtime_exp = (thsync +1) * clk_time;
+assign htime_exp  = (thlen +1) * clk_time;
+assign vhtime_exp = (htime_exp * (tvsync +1));
+assign vtime_exp  = htime_exp * (tvlen +1);
 
 always @(posedge pclk)
 	if(!rst | !enable)
@@ -167,7 +170,12 @@ always @(vsync)
       end
 
 // Verify BLANC Timing
-assign bv_start = tvsync   + tvgdel + 2;
+//assign bv_start = tvsync   + tvgdel + 2;
+//assign bv_end   = bv_start + tvgate + 2;
+
+//assign bh_start = thsync   + thgdel + 1;
+//assign bh_end   = bh_start + thgate + 2;
+assign bv_start = tvsync   + tvgdel + 1;
 assign bv_end   = bv_start + tvgate + 2;
 
 assign bh_start = thsync   + thgdel + 1;

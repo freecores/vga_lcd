@@ -37,22 +37,25 @@
 
 //  CVS Log
 //
-//  $Id: test_bench_top.v,v 1.4 2002-02-07 05:38:32 rherveille Exp $
+//  $Id: test_bench_top.v,v 1.5 2003-03-19 12:20:53 rherveille Exp $
 //
-//  $Date: 2002-02-07 05:38:32 $
-//  $Revision: 1.4 $
+//  $Date: 2003-03-19 12:20:53 $
+//  $Revision: 1.5 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.4  2002/02/07 05:38:32  rherveille
+//               Added wb_ack delay section to testbench
+//
 //
 //
 //
 //                        
 
-`timescale 1ns / 10ps
+`timescale 1ns/10ps
 
 module test;
 
@@ -142,7 +145,7 @@ reg	[7:0]	bank;
 
 `define USE_VC		1
 
-parameter	PCLK_C = 15;
+parameter	PCLK_C = 20;
 
 /////////////////////////////////////////////////////////////////////
 //
@@ -182,15 +185,15 @@ if(0)	// Full Regression Run
 else
 if(1)	// Quick Regression Run
    begin
-	//reg_test;
-	//tim_test;
+	reg_test;
+	tim_test;
 
 	delay = 2;
 	for(delay = 0; delay < 3; delay = delay +1)
 	begin
 		$display("Setting wishbone slave delay to %d", delay);
 		s0.delay = delay;
-		//pd1_test;
+		pd1_test;
 		pd2_test;
 	end
 
@@ -492,8 +495,10 @@ sync_check #(PCLK_C) uceck(
 //
 
 always @(posedge clk)
-	if(wb_cyc_i | wb_cyc_o | wb_ack_i | wb_ack_o | hsync)	wd_cnt <= #1 0;
-	else						wd_cnt <= #1 wd_cnt + 1;
+	if(wb_cyc_i | wb_cyc_o | wb_ack_i | wb_ack_o | hsync)
+	  wd_cnt <= #1 0;
+	else
+	  wd_cnt <= #1 wd_cnt + 1;
 
 
 always @(wd_cnt)
@@ -529,42 +534,43 @@ assign clk_v = clk;
 
 `ifdef USE_VC
 vga_enh_top #(1'b0, LINE_FIFO_AWIDTH) u0 (
-		.wb_clk_i(		clk		),
-		.wb_rst_i(		1'b0 ),
-		.rst_i(		rst		),
-		.wb_inta_o(		int		),
+		.wb_clk_i    ( clk             ),
+		.wb_rst_i    ( 1'b0            ),
+		.rst_i       ( rst             ),
+		.wb_inta_o   ( int             ),
 
 		//-- slave signals
-		.wbs_adr_i(		wb_addr_i[11:0]	),
-		.wbs_dat_i(		wb_data_i	),
-		.wbs_dat_o(		wb_data_o	),
-		.wbs_sel_i(		wb_sel_i	),
-		.wbs_we_i(		wb_we_i		),
-		.wbs_stb_i(		wb_stb_i	),
-		.wbs_cyc_i(		wb_cyc_i	),
-		.wbs_ack_o(		wb_ack_o	),
-		.wbs_err_o(		wb_err_o	),
+		.wbs_adr_i   ( wb_addr_i[11:0] ),
+		.wbs_dat_i   ( wb_data_i       ),
+		.wbs_dat_o   ( wb_data_o       ),
+		.wbs_sel_i   ( wb_sel_i        ),
+		.wbs_we_i    ( wb_we_i         ),
+		.wbs_stb_i   ( wb_stb_i        ),
+		.wbs_cyc_i   ( wb_cyc_i        ),
+		.wbs_ack_o   ( wb_ack_o        ),
+		.wbs_err_o   ( wb_err_o        ),
 
 		//-- master signals
-		.wbm_adr_o(		wb_addr_o[31:0]	),
-		.wbm_dat_i(		wbm_data_i	),
-		.wbm_sel_o(		wb_sel_o	),
-		.wbm_we_o(		wb_we_o		),
-		.wbm_stb_o(		wb_stb_o	),
-		.wbm_cyc_o(		wb_cyc_o	),
-		.wbm_cab_o(				),
-		.wbm_ack_i(		wb_ack_i	),
-		.wbm_err_i(		wb_err_i	),
+		.wbm_adr_o   ( wb_addr_o[31:0] ),
+		.wbm_dat_i   ( wbm_data_i      ),
+		.wbm_sel_o   ( wb_sel_o        ),
+		.wbm_we_o    ( wb_we_o         ),
+		.wbm_stb_o   ( wb_stb_o        ),
+		.wbm_cyc_o   ( wb_cyc_o        ),
+		.wbm_cti_o   ( ),
+		.wbm_bte_o   ( ),
+		.wbm_ack_i   ( wb_ack_i        ),
+		.wbm_err_i   ( wb_err_i        ),
 
 		//-- VGA signals
-		.clk_p_i(		pclk		),
-		.hsync_pad_o(	hsync		),
-		.vsync_pad_o(	vsync		),
-		.csync_pad_o(	csync		),
-		.blank_pad_o(	blanc		),
-		.r_pad_o(		red		),
-		.g_pad_o(		green		),
-		.b_pad_o(		blue		)
+		.clk_p_i     ( pclk            ),
+		.hsync_pad_o ( hsync           ),
+		.vsync_pad_o ( vsync           ),
+		.csync_pad_o ( csync           ),
+		.blank_pad_o ( blanc           ),
+		.r_pad_o     ( red             ),
+		.g_pad_o     ( green           ),
+		.b_pad_o     ( blue            )
 	);
 
 `else
@@ -640,88 +646,3 @@ wb_slv #(24) s0(.clk(		clk		),
 `include "tests.v"
 
 endmodule
-
-/*
-module vdata_mon(clk, rst, hsync, vsync, blank, pixel, line);
-input		clk, rst;
-input		hsync, vsync, blank;
-output	[31:0]	pixel, line;
-
-reg	[31:0]	pixel, line;
-
-always @(negedge blank)
-	line = line + 1;
-
-always @(posedge vsync or negedge rst)
-	line = -1;
-
-always @(posedge clk)
-	if(!blank)	pixel = pixel + 1;
-	else		pixel = 0;
-
-endmodule
-*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -37,21 +37,27 @@
 
 //  CVS Log
 //
-//  $Id: wb_model_defines.v,v 1.1 2001-08-21 05:42:32 rudi Exp $
+//  $Id: wb_model_defines.v,v 1.2 2003-03-19 12:20:53 rherveille Exp $
 //
-//  $Date: 2001-08-21 05:42:32 $
-//  $Revision: 1.1 $
-//  $Author: rudi $
+//  $Date: 2003-03-19 12:20:53 $
+//  $Revision: 1.2 $
+//  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.1  2001/08/21 05:42:32  rudi
+//
+//               - Changed Directory Structure
+//               - Added verilog Source Code
+//               - Changed IO pin names and defines statements
+//
 //               Revision 1.1.1.1  2001/03/19 13:12:48  rudi
 //               Initial Release
 //
 //
 //
 
-//`timescale 1ns / 10ps
-`timescale 1ns / 1ns
+`timescale 1ns / 10ps
+//`timescale 1ns / 1ns

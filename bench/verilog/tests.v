@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: tests.v,v 1.5 2002-04-20 09:57:55 rherveille Exp $
+//  $Id: tests.v,v 1.6 2003-03-19 12:20:53 rherveille Exp $
 //
-//  $Date: 2002-04-20 09:57:55 $
-//  $Revision: 1.5 $
+//  $Date: 2003-03-19 12:20:53 $
+//  $Revision: 1.6 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.5  2002/04/20 09:57:55  rherveille
+//               Changed testbench to reflect modified VGA timing generator.
+//
 //
 //
 //
@@ -171,13 +174,16 @@ $display("*****************************************************\n");
 
 	m0.wb_wr1( `VBARA, 4'hf, 0 );
 	m0.wb_wr1( `VBARB, 4'hf, 0 );
-	m0.wb_wr1( `CTRL,  4'hf, 32'h0000_0000);
-   	repeat(10)	@(posedge clk);
-mode = 4;
 
+mode = 2;
 for(mode=0;mode<6;mode=mode+1)
    begin
+	
+	// reset core
 	scen = 0;
+	m0.wb_wr1( `CTRL,  4'hf, 32'h0000_0000);
+	repeat(10)	@(posedge clk);
+
 	$display("Mode: %0d", mode);
 
 	case(mode)
@@ -185,12 +191,12 @@ for(mode=0;mode<6;mode=mode+1)
 		begin
 			thsync = 0;
 			thgdel = 0;
-			thgate = 340;
+			thgate = 319; // gate = 320
 			thlen = 345;
 
 			tvsync = 0;
 			tvgdel = 0;
-			tvgate = 240;
+			tvgate = 239; // vgate = 240
 			tvlen = 245;
 
 			hpol = 0;
@@ -203,12 +209,12 @@ for(mode=0;mode<6;mode=mode+1)
 		begin
 			thsync = 18;
 			thgdel = 18;
-			thgate = 340;
+			thgate = 319; // gate = 320
 			thlen = 390;
 
 			tvsync = 18;
 			tvgdel = 18;
-			tvgate = 240;
+			tvgate = 239; // vgate = 240
 			tvlen = 290;
 
 			hpol = 1;
@@ -221,13 +227,13 @@ for(mode=0;mode<6;mode=mode+1)
 		begin
 			thsync = 1;
 			thgdel = 1;
-			thgate = 640;
-			thlen = 643;
+			thgate = 639; // hgate = 640
+			thlen = 644;
 
 			tvsync = 1;
 			tvgdel = 1;
-			tvgate = 480;
-			tvlen = 483;
+			tvgate = 479; // vgate = 480
+			tvlen = 484;
 
 			hpol = 0;
 			vpol = 1;
@@ -239,12 +245,12 @@ for(mode=0;mode<6;mode=mode+1)
 		begin
 			thsync = 0;
 			thgdel = 2;
-			thgate = 800;
+			thgate = 799; // hgate = 800
 			thlen = 804;
 
 			tvsync = 0;
 			tvgdel = 2;
-			tvgate = 600;
+			tvgate = 599; // vgate = 600
 			tvlen = 604;
 
 			hpol = 0;
@@ -257,12 +263,12 @@ for(mode=0;mode<6;mode=mode+1)
 		begin
 			thsync = 3;
 			thgdel = 2;
-			thgate = 800;
-			thlen = 806;
+			thgate = 799; // hgate = 800
+			thlen = 807;
 
 			tvsync = 2;
 			tvgdel = 2;
-			tvgate = 600;
+			tvgate = 599; // vgate = 600
 			tvlen = 606;
 
 			hpol = 0;
@@ -275,13 +281,13 @@ for(mode=0;mode<6;mode=mode+1)
 		begin
 			thsync = 6;
 			thgdel = 2;
-			thgate = 800;
+			thgate = 799; // hgate = 800
 			thlen = 810;
 
 			tvsync = 4;
 			tvgdel = 2;
-			tvgate = 600;
-			tvlen = 607;
+			tvgate = 599; // vgate = 600
+			tvlen = 608;
 
 			hpol = 1;
 			vpol = 1;
@@ -707,8 +713,8 @@ $display("*****************************************************\n");
 
 	tvsync = 1;
 	tvgdel = 8;
-//	tvgate = 239;
-	tvgate = 240;
+	tvgate = 239;
+//	tvgate = 240;
 	tvlen = 280;
 
 /*
@@ -759,7 +765,7 @@ repeat(10)	@(posedge clk);
 `endif
 
 
-vbl = 0;
+vbl = 3;
 mode = 1;
 
 for(vbl=0;vbl<4;vbl=vbl+1)
