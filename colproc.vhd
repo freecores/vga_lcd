@@ -2,8 +2,8 @@
 -- File colproc.vhd, Color Processor
 -- Project: VGA
 -- Author : Richard Herveille, Sherif Taher Eid
--- rev.: 0.1 May 1st, 2001
---
+-- rev.: 0.1 May  1st, 2001
+-- rev.: 0.2 June 23rd, 2001. Removed unused "prev_state" references from statemachine. Removed unused "dWB_Di" signal.
 --
 --
 
@@ -40,7 +40,6 @@ architecture structural of colproc is
 	signal Ra, Ga, Ba : std_logic_vector(7 downto 0);
 	signal colcnt : unsigned(1 downto 0);
 	signal RGBbuf_wreq : std_logic;
-	signal dWB_Di : std_logic_vector(31 downto 0);   -- delayed wishbone data input
 begin
 	-- store word from pixelbuffer / wishbone input
 	process(clk)
@@ -49,15 +48,13 @@ begin
 			if (pixel_buffer_rreq = '1') then
 				DataBuffer <= pixel_buffer_Di;
 			end if;
-
-			dWB_Di <= WB_Di;
 		end if;
 	end process;
 
 	-- extract color information from data buffer
 	statemachine: block
 		type states is (idle, fill_buf, bw_8bpp, col_8bpp, col_16bpp_a, col_16bpp_b, col_24bpp);
-		signal c_state, prev_state : states;
+		signal c_state : states;
 	begin
 		gen_nxt_state: process(clk, c_state, pixel_buffer_empty, ColorDepth, PseudoColor, RGB_fifo_full, colcnt, clut_ack)
 			variable nxt_state : states;
@@ -134,10 +131,8 @@ begin
 			if (clk'event and clk = '1') then
 				if (ctrl_Ven = '0') then
 					c_state <= idle;
-					prev_state <= idle;
 				else
 					c_state <= nxt_state;
-					prev_state <= c_state;
 				end if;
 			end if;
 		end process gen_nxt_state;

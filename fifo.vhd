@@ -2,8 +2,8 @@
 -- File fifo.vhd (universal FIFO)
 -- Author : Richard Herveille
 -- rev.: 0.1 May 04th, 2001
--- rev.: 0.2 June 16th, 2001 Changed "function bitcount" until it compiled under Xilinx Webpack
---
+-- rev.: 0.2 June 16th, 2001. Changed "function bitcount" until it compiled under Xilinx Webpack
+-- rev.: 0.3 June 23nd, 2001. Removed unused "dummy" variable from function bitcount.
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -35,7 +35,7 @@ architecture structural of FIFO is
 	-- bitcount, return no.of bits required for 'n'
 	function bitcount(n : in natural) return natural is
 		variable tmp : unsigned(32 downto 1);
-		variable cnt, dummy : natural;
+		variable cnt : natural;
 	begin
 		tmp := conv_unsigned(n, 32);
 

@@ -95,7 +95,7 @@ begin
 --											DI => D, DOUT => dout);
 
 
-	-- common process for generic and 
+	-- common process for generic and implementation specific memory
 	-- synchronize dout to read clock
 	synch_dout: process(rclk)
 	begin

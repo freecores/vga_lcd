@@ -4,7 +4,7 @@
 -- Author : Richard Herveille
 -- rev.: 1.0 May 1st, 2001
 -- rev.: 1.1 June 3rd, 2001. Changed address related sections.
---
+-- rev.: 1.2 June 23nd, 2001. Removed unused "sel_vba", "vmem_offs" and "bl" signals.
 --
 
 library ieee;
@@ -108,12 +108,9 @@ architecture structural of wb_master is
 
 	signal nVen : std_logic;                                                 -- NOT ctrl_Ven (video enable)
 	signal vmem_acc, dvmem_acc, bvmem_acc, clut_acc, dclut_acc : std_logic;  -- video memory access // delayed vmem_acc // video memory burst // clut access
-	signal sel_VBA : std_logic;                                              -- select video memory base address
 	signal clut_req, clut_ack : std_logic;                                   -- clut access request // clut access acknowledge
 	signal clut_offs : unsigned(7 downto 0);                                 -- clut memory offset
 	signal nvmem_req, vmem_ack : std_logic;                                  -- NOT video memory access request // video memory access acknowledge
-	signal vmem_offs : unsigned(31 downto 2);                                -- video memory offset
-	signal bl : unsigned(3 downto 0);
 	signal pixelbuf_rreq, pixelbuf_empty : std_logic;
 	signal pixelbuf_q : std_logic_vector(31 downto 0);
 	signal RGBbuf_rreq, RGBbuf_wreq, RGBbuf_empty, RGBbuf_full, fill_RGBfifo, RGB_fifo_full : std_logic;

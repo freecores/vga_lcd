@@ -7,7 +7,7 @@
 --          WARNING: DO NOT CHANGE THIS FILE
 --                   CHANGE "DPM.VHD" FOR TARGET SPECIFIC MEMORY BLOCKS
 --
--- rev.
+-- rev. 1.1: June 23nd, 2001. Removed unused "drptr" and "fifo_cnt" signals
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -73,8 +73,7 @@ architecture structural of FIFO_DC is
 
 	constant AWIDTH : natural := bitcount(DEPTH -1); -- 256 entries: range 255 downto 0
 
-	signal rptr, drptr, wptr : unsigned(AWIDTH -1 downto 0);
-	signal fifo_cnt : unsigned(AWIDTH downto 0);
+	signal rptr, wptr : unsigned(AWIDTH -1 downto 0);
 	signal ifull, iempty, wempty, wfull, rempty, rfull : std_logic;
 begin
 	--
@@ -85,11 +84,9 @@ begin
 	begin
 		if (aclr = '0') then
 			rptr  <= (others => '0');
-			drptr <= (others => '1');
 		elsif (rclk'event and rclk = '1') then
 			if (rreq = '1') then
 				rptr  <= rptr +1;
-				drptr <= rptr;
 			end if;
 		end if;
 	end process gen_rd_ptr;

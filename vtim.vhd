@@ -3,7 +3,7 @@
 -- Project: VGA
 -- Author : Richard Herveille
 -- rev.: 0.1 April 13th, 2001
---
+-- rev.: 0.2 June  23nd, 2001. Removed unused "rst_strb" signal.
 --
 --
 
@@ -33,7 +33,7 @@ end entity vtim;
 
 architecture structural of vtim is
 	signal Dsync, Dgdel, Dgate, Dlen : std_logic;
-	signal go, drst, rst_strb : std_logic;
+	signal go, drst : std_logic;
 begin
 	-- generate go signal
 	gen_go: process(clk)
