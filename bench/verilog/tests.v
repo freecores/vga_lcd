@@ -37,11 +37,11 @@
 
 //  CVS Log
 //
-//  $Id: tests.v,v 1.1 2001-08-21 05:42:32 rudi Exp $
+//  $Id: tests.v,v 1.2 2001-11-15 07:04:14 rherveille Exp $
 //
-//  $Date: 2001-08-21 05:42:32 $
-//  $Revision: 1.1 $
-//  $Author: rudi $
+//  $Date: 2001-11-15 07:04:14 $
+//  $Revision: 1.2 $
+//  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
@@ -87,41 +87,38 @@ $display("*****************************************************\n");
 	check( `HVLEN, 0, 32'hffff_ffff, "HVLEN");
 	check( `VBARA, 0, 32'hffff_ffff, "VBARA");
 	check( `VBARB, 0, 32'hffff_ffff, "VBARB");
-	check( `CBAR,  0, 32'hffff_ff00, "CBAR ");
 
 	$display("Testing Pattern R/W ...");
 for(n=0;n<6;n=n+1)
-   begin
-	case(n)
-	   0: pattern = 32'h0000_0000;
-	   1: pattern = 32'hffff_ffff;
-	   2: pattern = 32'haaaa_aaaa;
-	   3: pattern = 32'h5555_5555;
-	   4: pattern = 32'hcccc_cccc;
-	   5: pattern = 32'h3333_3333;
-	endcase
+	begin
+		case(n)
+	 	  0: pattern = 32'h0000_0000;
+	 	  1: pattern = 32'hffff_ffff;
+	 	  2: pattern = 32'haaaa_aaaa;
+	 	  3: pattern = 32'h5555_5555;
+	 	  4: pattern = 32'hcccc_cccc;
+	 	  5: pattern = 32'h3333_3333;
+		endcase
 
-	m0.wb_wr1( `CTRL, 4'hf, pattern );
-	check( `CTRL,  pattern, 32'h0000_ffff, "CTRL ");
+		m0.wb_wr1( `CTRL, 4'hf, pattern );
+		check( `CTRL,  pattern, 32'h0000_ffff, "CTRL ");
 
-	m0.wb_wr1( `HTIM, 4'hf, pattern );
-	check( `HTIM,  pattern, 32'hffff_ffff, "HTIM ");
+		m0.wb_wr1( `HTIM, 4'hf, pattern );
+		check( `HTIM,  pattern, 32'hffff_ffff, "HTIM ");
 
-	m0.wb_wr1( `VTIM, 4'hf, pattern );
-	check( `VTIM,  pattern, 32'hffff_ffff, "VTIM ");
+		m0.wb_wr1( `VTIM, 4'hf, pattern );
+		check( `VTIM,  pattern, 32'hffff_ffff, "VTIM ");
 
-	m0.wb_wr1( `HVLEN, 4'hf, pattern );
-	check( `HVLEN, pattern, 32'hffff_ffff, "HVLEN");
+		m0.wb_wr1( `HVLEN, 4'hf, pattern );
+		check( `HVLEN, pattern, 32'hffff_ffff, "HVLEN");
 
-	m0.wb_wr1( `VBARA, 4'hf, pattern );
-	check( `VBARA, pattern, 32'hffff_fffc, "VBARA");
+		m0.wb_wr1( `VBARA, 4'hf, pattern );
+		check( `VBARA, pattern, 32'hffff_fffc, "VBARA");
 
-	m0.wb_wr1( `VBARB, 4'hf, pattern );
-	check( `VBARB, pattern, 32'hffff_fffc, "VBARB");
+		m0.wb_wr1( `VBARB, 4'hf, pattern );
+		check( `VBARB, pattern, 32'hffff_fffc, "VBARB");
 
-	m0.wb_wr1( `CBAR, 4'hf, pattern );
-	check( `CBAR,  pattern, 32'hffff_f800, "CBAR ");
-   end
+	end
 
 repeat(10)	@(posedge clk);
 
@@ -174,7 +171,6 @@ $display("*****************************************************\n");
 
 	m0.wb_wr1( `VBARA, 4'hf, 0 );
 	m0.wb_wr1( `VBARB, 4'hf, 0 );
-	m0.wb_wr1( `CBAR,  4'hf, 0 );
 	m0.wb_wr1( `CTRL,  4'hf, 32'h0000_0000);
    	repeat(10)	@(posedge clk);
 mode = 4;
@@ -354,8 +350,8 @@ reg	[31:0]	pra, paa, tmp;
 reg	[23:0]	pd;
 reg	[1:0]	cd;
 reg		pc;
-reg	[31:0]	cbar;
 reg	[31:0]	data;
+reg [31:0] cbar;
 reg	[7:0]	vbl;
 
 begin
@@ -368,12 +364,11 @@ $display("*****************************************************\n");
 	m0.wb_wr1( `VBARA, 4'hf, 0 );
 	m0.wb_wr1( `VBARB, 4'hf, 123456 );
 
-	cbar = 32'h0010_0000;
-	m0.wb_wr1( `CBAR,  4'hf, cbar);
+	cbar = 32'h0000_0800;
 
 	thsync = 0;
 	thgdel = 0;
-	thgate = 340;
+	thgate = 320;
 	thlen = 345;
 
 	tvsync = 0;
@@ -433,7 +428,8 @@ $display("*****************************************************\n");
 	m0.wb_wr1( `VTIM,  4'hf, {tvsync, tvgdel, tvgate} );
 	m0.wb_wr1( `HVLEN, 4'hf, {thlen, tvlen} );
 
-mode = 0;
+mode = 2;
+vbl = 0;
 
 for(vbl=0;vbl<4;vbl=vbl+1)
 for(mode=0;mode<4;mode=mode+1)
@@ -449,10 +445,10 @@ for(mode=0;mode<4;mode=mode+1)
 				pc,	// 1'b0,	// PC
 				cd,	// 2'h2,	// CD
 				2'h0,	// VBL
-				1'b0,	// Reserved
 				1'b0,	// CBSWE
 				1'b0,	// VBSWE
-				1'b0,	// BSIE
+				1'b0, // CBSIE
+				1'b0,	// VBSIE
 				1'b0,	// HIE
 				1'b0,	// VIE
 				1'b0	// Video Enable
@@ -467,7 +463,7 @@ for(n=0;n<512;n=n+1)
    begin
 	//m0.wb_rd1( 32'h0002_0000 + (n*4), 4'hf, data );
 	data = s0.mem[ cbar[31:2] + n];
-	m0.wb_wr1( 32'h8000_0000 + (n*4), 4'hf, data );
+	m0.wb_wr1( 32'h0000_0800 + (n*4), 4'hf, data );
    end
 repeat(10)	@(posedge clk);
 `endif
@@ -693,16 +689,16 @@ $display("*****************************************************");
 $display("*** Pixel Data Test 2                             ***");
 $display("*****************************************************\n");
 
+	s0.fill_mem(1);
 
    	repeat(10)	@(posedge clk);
 
 	vbara = 32'h0000_0000;
 	vbarb = 32'h0040_0000;
-	cbar  = 32'h0080_0000;
+	cbar  = 32'h0000_0800;
 
 	m0.wb_wr1( `VBARA, 4'hf, vbara );
 	m0.wb_wr1( `VBARB, 4'hf, vbarb );
-	m0.wb_wr1( `CBAR,  4'hf, cbar);
 
 	thsync = 6;
 	thgdel = 20;
@@ -748,7 +744,7 @@ $display("*****************************************************\n");
 	m0.wb_wr1( `VTIM,  4'hf, {tvsync, tvgdel, tvgate} );
 	m0.wb_wr1( `HVLEN, 4'hf, {thlen, tvlen} );
 
-s0.fill_mem(1);
+
 `ifdef USE_VC
 // Fill internal Color Lookup Table
 repeat(10)	@(posedge clk);
@@ -756,17 +752,17 @@ for(n=0;n<512;n=n+1)
    begin
 	//m0.wb_rd1( 32'h0002_0000 + (n*4), 4'hf, data );
 	data = s0.mem[ cbar[31:2] + n];
-	m0.wb_wr1( 32'h8000_0000 + (n*4), 4'hf, data );
+	m0.wb_wr1( 32'h0000_0800 + (n*4), 4'hf, data );
    end
 repeat(10)	@(posedge clk);
 `endif
 
 
-vbl = 0;
-mode = 2;
+vbl = 3;
+mode = 0;
 
-for(vbl=0;vbl<4;vbl=vbl+1)
-for(mode=0;mode<4;mode=mode+1)
+//for(vbl=0;vbl<4;vbl=vbl+1)
+//for(mode=0;mode<4;mode=mode+1)
    begin
 
 	m0.wb_wr1( `CTRL,  4'hf, 32'h0);
@@ -802,10 +798,10 @@ for(mode=0;mode<4;mode=mode+1)
 				pc,	// 1'b0,	// PC
 				cd,	// 2'h2,	// CD
 				vbl[1:0],// VBL
-				1'b0,	// Reserved
 				1'b1,	// CBSWE
 				1'b1,	// VBSWE
-				1'b0,	// BSIE
+				1'b0, // CBSIE
+				1'b0,	// VBSIE
 				1'b0,	// HIE
 				1'b0,	// VIE
 				1'b1	// Video Enable
@@ -1006,8 +1002,7 @@ $display("*****************************************************\n");
 	m0.wb_wr1( `VBARA, 4'hf, 0 );
 	m0.wb_wr1( `VBARB, 4'hf, 123456 );
 
-	cbar = 32'h0010_0000;
-	m0.wb_wr1( `CBAR,  4'hf, cbar);
+	cbar = 32'h0000_0800;
 
 	thsync = 0;
 	thgdel = 0;
@@ -1153,5 +1148,76 @@ repeat(10) @(posedge clk);
 
 end
 endtask
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

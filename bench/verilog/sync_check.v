@@ -37,11 +37,11 @@
 
 //  CVS Log
 //
-//  $Id: sync_check.v,v 1.1 2001-08-21 05:42:32 rudi Exp $
+//  $Id: sync_check.v,v 1.2 2001-11-15 07:04:15 rherveille Exp $
 //
-//  $Date: 2001-08-21 05:42:32 $
-//  $Revision: 1.1 $
-//  $Author: rudi $
+//  $Date: 2001-11-15 07:04:15 $
+//  $Revision: 1.2 $
+//  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
@@ -96,6 +96,9 @@ reg		bval;
 integer		bdel2;
 wire		bcheck;
 
+//initial hvalid=0;
+//initial vvalid=0;
+
 parameter	clk_time = 40;
 
 assign hcheck = enable;
@@ -119,6 +122,7 @@ always @(hsync)
 	if(hsync == ~hpol)
 	   begin
 		htime = $time - last_htime;
+		//if(hvalid)	$display("HSYNC length time: %0t", htime);
 		if(hvalid & (htime != htime_exp))
 			$display("HSYNC length ERROR: Expected: %0d Got: %0d (%0t)",
 				htime_exp, htime, $time);
@@ -129,11 +133,13 @@ always @(hsync)
 	if(hsync == hpol)
 	   begin
 		hhtime = $time - last_htime;
+		//if(hvalid)	$display("HSYNC pulse time: %0t", hhtime);
 		if(hvalid & (hhtime != hhtime_exp))
 			$display("HSYNC Pulse ERROR: Expected: %0d Got: %0d (%0t)",
 				hhtime_exp, hhtime, $time);
 	   end
       end
+
 
 // Verify VSYNC Timing
 always @(vsync)
@@ -142,6 +148,7 @@ always @(vsync)
 	if(vsync == ~vpol)
 	   begin
 		vtime = $time - last_vtime;
+		//if(vvalid)	$display("VSYNC length time: %0t", vtime);
 		if(vvalid & (vtime != vtime_exp))
 			$display("VSYNC length ERROR: Expected: %0d Got: %0d (%0t)",
 				vtime_exp, vtime, $time);
@@ -152,6 +159,7 @@ always @(vsync)
 	if(vsync == vpol)
 	   begin
 		vhtime = $time - last_vtime;
+		//if(vvalid)	$display("VSYNC pulse time: %0t", vhtime);
 		if(vvalid & (vhtime != vhtime_exp))
 			$display("VSYNC Pulse ERROR: Expected: %0d Got: %0d (%0t)",
 				vhtime_exp, vhtime, $time);
@@ -187,10 +195,11 @@ always @(posedge pclk)
 
 initial bval = 1;
 always @(bdel2)
-	bval = !(bval1 & (bdel2 > bh_start) & (bdel2 < bh_end));
+	bval = #1 !(bval1 & (bdel2 > bh_start) & (bdel2 < bh_end));
+
 
 always @(bval or blanc)
-	#2
+	#0.01
 	if(enable)
 	if(((blanc ^ bpol) != bval) & bcheck)
 		$display("BLANK ERROR: Expected: %0d Got: %0d (%0t)",
@@ -205,4 +214,10 @@ always @(csync or vsync or hsync)
 
 
 endmodule
+
+
+
+
+
+
 
