@@ -1,8 +1,8 @@
 --
--- Wishbone compliant cycle shared memory
+-- Wishbone compliant cycle shared memory, priority based selection
 -- author: Richard Herveille
 -- 
--- rev.: 1.0  june  19th, 2001. Initial release
+-- rev.: 1.0  july  12th, 2001. Initial release
 --
 -- 
 
@@ -10,14 +10,13 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.std_logic_arith.all;
 
-entity cycle_shared_mem is
+entity csm_pb is
 	generic(
 		DWIDTH : natural := 32; -- databus width
 		AWIDTH : natural := 8   -- addressbus width
 	);
 	port(
 		-- SYSCON signals
-		CLKx2_I : in std_logic; -- memory clock, 2x wishbone clock
 		CLK_I   : in std_logic; -- wishbone clock input
 		RST_I   : in std_logic; -- synchronous active high reset
 		nRESET  : in std_logic; -- asynchronous active low reset
@@ -44,108 +43,129 @@ entity cycle_shared_mem is
 		ACK1_O : out std_logic;                                -- acknowledge output
 		ERR1_O : out std_logic                                 -- error output
 	);
-end entity cycle_shared_mem;
+end entity csm_pb;
 
-architecture structural of cycle_shared_mem is
+architecture structural of csm_pb is
+	-- function declarations
+	function "and"(L: std_logic_vector; R : std_logic) return std_logic_vector is
+		variable tmp : std_logic_vector(L'range);
+	begin
+		for n in L'range loop
+			tmp(n) := L(n) and R;
+		end loop;
+		return tmp;
+	end function "and";
+
+	function "and"(L: std_logic; R : std_logic_vector) return std_logic_vector is
+	begin
+		return (R and L);
+	end function "and";
+
 	-- define memory array
 	type mem_array is array(2**AWIDTH -1 downto 0) of std_logic_vector(DWIDTH -1 downto 0);
 	signal mem : mem_array;
 
-	-- clock enable / multiplexor select signal
-	signal ena : std_logic;
+	-- multiplexor select signal
+	signal wb0_acc, dwb0_acc : std_logic;
+	signal wb1_acc, dwb1_acc : std_logic;
+	signal sel_wb0 : std_logic;
+	signal sel_wb1 : std_logic;
+	signal ack0_pipe, ack1_pipe : std_logic_vector(3 downto 0);
 	
 	-- multiplexed memory busses / signals
 	signal mem_adr, mem_radr : unsigned(AWIDTH -1 downto 0);
 	signal mem_dati, mem_dato : std_logic_vector(DWIDTH -1 downto 0);
 	signal mem_we : std_logic;
 
-	-- delayed NOT WE_I
 	-- acknowledge generation
-	signal wr_ack0, wr_ack1 : std_logic;
-	signal rd_ack0, rd_ack1 : std_logic;
+	signal wb0_ack, wb1_ack : std_logic;
 
-	-- error generation
-	signal all_ones : std_logic_vector( (DWIDTH/8) -1 downto 0);
+	-- error signal generation
+	signal err0, err1 : std_logic_vector( (DWIDTH/8) -1 downto 0);
 
 begin
-	-- generate clock enable signal
-	gen_ena: process(CLKx2_I, nReset)
+	-- generate multiplexor select signal
+	wb0_acc <= CYC0_I and STB0_I;
+	wb1_acc <= CYC1_I and STB1_I and not sel_wb0;
+
+	process(CLK_I)
 	begin
-		if (nReset = '0') then
-			ena <= '0';
-		elsif (CLKx2_I'event and CLKx2_I = '1') then
+		if (CLK_I'event and CLK_I = '1') then
+			dwb0_acc <= wb0_acc and not wb0_ack;
+			dwb1_acc <= wb1_acc and not wb1_ack;
+		end if;
+	end process;
+
+	sel_wb0 <= wb0_acc and not dwb0_acc;
+	sel_wb1 <= wb1_acc and not dwb1_acc;
+
+	gen_ack_pipe: process(CLK_I, nRESET)
+	begin
+		if (nRESET = '0') then
+			ack0_pipe <= (others => '0');
+			ack1_pipe <= (others => '0');
+		elsif (CLK_I'event and CLK_I = '1') then
 			if (RST_I = '1') then
-				ena <= '0';
+				ack0_pipe <= (others => '0');
+				ack1_pipe <= (others => '0');
 			else
-				ena <= not ena;
+				ack0_pipe <= (ack0_pipe(2 downto 0) & sel_wb0) and not wb0_ack;
+				ack1_pipe <= (ack1_pipe(2 downto 0) & sel_wb1) and not wb1_ack;
 			end if;
 		end if;
-	end process gen_ena;
-
+	end process gen_ack_pipe;
 
 	-- multiplex memory bus
-	gen_muxs: process(CLKx2_I)
+	gen_muxs: process(CLK_I)
 	begin
-		if (CLKx2_I'event and CLKx2_I = '1') then
-			if (ena = '0') then
+		if (CLK_I'event and CLK_I = '1') then
+			if (sel_wb0 = '1') then
 				mem_adr  <= adr0_i;
 				mem_dati <= dat0_i;
-				mem_we   <= we0_i and cyc0_i and stb0_i;
+				mem_we   <= we0_i and cyc0_i and stb0_i and not wb0_ack;
 			else
 				mem_adr  <= adr1_i;
 				mem_dati <= dat1_i;
-				mem_we   <= we1_i and cyc1_i and stb1_i;
+				mem_we   <= we1_i and cyc1_i and stb1_i and not wb1_ack;
 			end if;
 		end if;
 	end process gen_muxs;
 
 	-- memory access
-	gen_mem: process(CLKx2_I)
+	gen_mem: process(CLK_I)
 	begin
-		if (CLKx2_I'event and CLKx2_I = '1') then
+		if (CLK_I'event and CLK_I = '1') then
 			-- write operation
 			if (mem_we = '1') then
 				mem(conv_integer(mem_adr)) <= mem_dati;
 			end if;
 
 			-- read operation
-			mem_radr <= mem_adr; -- altera flex rams require synchronous read address
+			mem_radr <= mem_adr; -- FLEX RAMs require address to be registered with inclock for read operation.
 			mem_dato <= mem(conv_integer(mem_radr));
 		end if;		
 	end process gen_mem;
 
 	-- assign DAT_O outputs
-	gen_dato: process(CLKx2_I)
-	begin
-		if (CLKx2_I'event and CLKx2_I = '1') then
-			if (ena = '0') then
-				DAT1_O <= mem_dato;
-			else
-				DAT0_O <= mem_dato;
-			end if;
-		end if;
-	end process gen_dato;
+	DAT1_O <= mem_dato;
+	DAT0_O <= mem_dato;
 
 	-- assign ACK_O outputs
-	gen_dnwe: process(CLK_I, cyc0_i, stb0_i, we0_i, cyc1_i, stb1_i, we1_i)
-		variable rack0, rack1 : std_logic;
+	gen_ack: process(CLK_I)
 	begin
 		if (CLK_I'event and CLK_I = '1') then
-			rd_ack0 <= rack0 and not rd_ack0;--  and cyc0_i and stb0_i;
-			rd_ack1 <= rack1 and not rd_ack1; -- and cyc1_i and stb1_i;
-
-			rack0 := not we0_i and cyc0_i and stb0_i and not rd_ack0;
-			rack1 := not we1_i and cyc1_i and stb1_i and not rd_ack1;
+			wb0_ack <= ( (sel_wb0 and WE0_I) or (ack0_pipe(1)) ) and not wb0_ack;
+			wb1_ack <= ( (sel_wb1 and WE1_I) or (ack1_pipe(1)) ) and not wb1_ack;
 		end if;
-	end process gen_dnwe;
-	wr_ack0 <= cyc0_i and stb0_i and we0_i;
-	wr_ack1 <= cyc1_i and stb1_i and we1_i;
- 
-	ACK0_O <= wr_ack0 or rd_ack0;
-	ACK1_O <= wr_ack1 or rd_ack1;
+	end process gen_ack;
+	-- ACK outputs
+	ACK0_O <= wb0_ack;
+	ACK1_O <= wb1_ack;
 
-	all_ones <= (others => '1'); -- all ones
-	ERR0_O <= '1' when ((CYC0_I = '1') and (STB0_I = '1') and (SEL0_I /= all_ones)) else '0';
-	ERR1_O <= '1' when ((CYC1_I = '1') and (STB1_I = '1') and (SEL1_I /= all_ones)) else '0';
+	-- ERR outputs
+	err0 <= (others => '1');
+	ERR0_O <= '1' when ( (SEL0_I /= err0) and (CYC0_I = '1') and (STB0_I = '1') ) else '0';
 
+	err1 <= (others => '1');
+	ERR1_O <= '1' when ( (SEL1_I /= err1) and (CYC1_I = '1') and (STB1_I = '1') ) else '0';
 end architecture;

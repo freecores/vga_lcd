@@ -3,8 +3,8 @@
 -- project: VGA/LCD controller + Color Lookup Table
 -- author: Richard Herveille
 --
--- rev 1.0 July 4th, 2001.
---
+-- rev. 1.0 July  4th, 2001.
+-- rev. 1.1 July 15th, 2001. Changed cycle_shared_memory to csm_pb. The core does not require a CLKx2 clock anymore.
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -13,7 +13,6 @@ use ieee.std_logic_arith.all;
 entity vga_and_clut is
 	port(
 		CLK_I   : in std_logic;                         -- wishbone clock input
-		CLKx2_I : in std_logic;                         -- 2X wishbone clock input (double frequency)
 		RST_I   : in std_logic;                         -- synchronous active high reset
 		NRESET  : in std_logic;                         -- asynchronous active low reset
 		INTA_O  : out std_logic;                        -- interrupt request output
@@ -94,14 +93,13 @@ architecture structural of vga_and_clut is
 	);
 	end component vga;
 
-	component cycle_shared_mem is
+	component csm_pb is
 	generic(
 		DWIDTH : natural := 32; -- databus width
 		AWIDTH : natural := 8   -- addressbus width
 	);
 	port(
 		-- SYSCON signals
-		CLKx2_I : in std_logic; -- memory clock, 2x wishbone clock
 		CLK_I   : in std_logic; -- wishbone clock input
 		RST_I   : in std_logic; -- synchronous active high reset
 		nRESET  : in std_logic; -- asynchronous active low reset
@@ -128,7 +126,7 @@ architecture structural of vga_and_clut is
 		ACK1_O : out std_logic;                                -- acknowledge output
 		ERR1_O : out std_logic                                 -- error output
 	);
-	end component cycle_shared_mem;
+	end component csm_pb;
 
 	--
 	-- Signal declarations
@@ -182,9 +180,9 @@ begin
 	-- hookup cycle shared memory
 	--
 	empty_data <= (others => '0');
-	u2: cycle_shared_mem 
+	u2: csm_pb 
 			generic map (DWIDTH => 24, AWIDTH => 8)
-			port map (CLKx2_I => CLKx2_I, CLK_I => CLK_I, RST_I => RST_I, nRESET => nReset,
+			port map (CLK_I => CLK_I, RST_I => RST_I, nRESET => nReset,
 				ADR0_I => vga_adr_o(9 downto 2), DAT0_I => empty_data, DAT0_O => mem0_dat_o, SEL0_I => vga_sel_o(2 downto 0), 
 				WE0_I => vga_we_o, STB0_I => vga_stb_o, CYC0_I => vga_cyc_o, ACK0_O => mem0_ack_o, ERR0_O => mem0_err_o,
 				ADR1_I => ADR_I(9 downto 2), DAT1_I => SDAT_I(23 downto 0), DAT1_O => mem1_dat_o, SEL1_I => SEL_I(2 downto 0),
@@ -195,7 +193,7 @@ begin
 	--
 
 	-- wishbone master
-	CYC_O <= vga_cyc_o;
+	CYC_O <= '0' when (vga_clut_acc = '1') else vga_cyc_o;
 	STB_O <= '0' when (vga_clut_acc = '1') else vga_stb_o;
 	ADR_O <= vga_adr_o;
 	SEL_O <= vga_sel_o;
@@ -210,6 +208,5 @@ begin
 	ACK_O  <= mem1_ack_o when (CLUT_STB_I = '1') else vga_ack_o;
 	ERR_O  <= mem1_err_o when (CLUT_STB_I = '1') else vga_err_o;
 end architecture structural;
-
 
 

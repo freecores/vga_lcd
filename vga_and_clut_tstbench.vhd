@@ -23,7 +23,6 @@ architecture test of tst_bench is
 	component vga_and_clut is
 	port(
 		CLK_I   : in std_logic;                         -- wishbone clock input
-		CLKx2_I : in std_logic;                         -- 2X wishbone clock input (double frequency)
 		RST_I   : in std_logic;                         -- synchronous active high reset
 		NRESET  : in std_logic := '1';                  -- asynchronous active low reset
 		INTA_O  : out std_logic;                        -- interrupt request output
@@ -100,7 +99,7 @@ architecture test of tst_bench is
 	--
 
 	-- clock & reset
-	signal clk_x2, clk, vga_clk : std_logic := '0';
+	signal clk, vga_clk : std_logic := '0';
 	signal rst : std_logic := '1';
 	signal init : std_logic := '0';
 
@@ -126,12 +125,9 @@ begin
 	-- generate clocks
 	clk_block: block
 	begin
-		process(clk_x2)
+		process(clk)
 		begin
-			clk_x2 <= not clk_x2 after 1.25 ns; -- 400MHz clock
-			if (clk_x2 = '1') then
-				clk <= not clk; -- 200MHz wishbone clock
-			end if;
+			clk <= not clk after 2.5 ns; -- 200MHz wishbone clock
 		end process;
 
 		process(vga_clk)
@@ -152,7 +148,7 @@ begin
 	--
 	-- hookup vga + clut core
 	--
-	u1: vga_and_clut port map (CLK_I => clk, CLKx2_I => clk_x2, RST_I => RST, ADR_I => h_adr_o(9 downto 2),
+	u1: vga_and_clut port map (CLK_I => clk, RST_I => RST, ADR_I => h_adr_o(9 downto 2),
 		SDAT_I => h_dat_o, SDAT_O => h_dat_i, SEL_I => h_sel_o, WE_I => h_we_o, VGA_STB_I => h_adr_o(31),
 		CLUT_STB_I => h_adr_o(30), CYC_I => h_cyc_o, ACK_O => h_ack_i, ERR_O => h_err_i,
 		ADR_O => vga_adr_o, MDAT_I => vga_dat_i, SEL_O => vga_sel_o, WE_O => vga_we_o, STB_O => vga_stb_o,
@@ -265,7 +261,7 @@ architecture behavioral of wb_host is
 			-- program vga controller
 			(x"80000008",'1',x"04090018","1111",'0'), --32 program horizontal timing register
 			(x"8000000c",'1',x"05010002","1111",'0'), --   program vertical timing register
-			(x"80000010",'1',x"00640064","1111",'0'), --   program horizontal/vertical length register (100x100 pixels)
+			(x"80000010",'1',x"00320032","1111",'0'), --   program horizontal/vertical length register (50x50 pixels)
 			(x"80000014",'1',x"10000000","1111",'0'), --   program video base address 0 register (sdram)
 			(x"8000001c",'1',x"10200000","1111",'0'), --   program color lookup table (sram)
 			(x"80000000",'1',x"00000901","1111",'0'), --   program control register (enable video system)
@@ -411,7 +407,4 @@ begin
 		my_ack <= '1' when ((cyc_i = '1') and (stb_i = '1') and (cnt = 0)) else '0';
 		ack_o <= my_ack;
 end architecture behavioral;
-
-
-
 
