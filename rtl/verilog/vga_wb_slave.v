@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: vga_wb_slave.v,v 1.10 2002-03-28 04:59:25 rherveille Exp $
+//  $Id: vga_wb_slave.v,v 1.11 2002-04-20 10:02:39 rherveille Exp $
 //
-//  $Date: 2002-03-28 04:59:25 $
-//  $Revision: 1.10 $
+//  $Date: 2002-04-20 10:02:39 $
+//  $Revision: 1.11 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.10  2002/03/28 04:59:25  rherveille
+//               Fixed two small bugs that only showed up when the hardware cursors were disabled
+//
 //               Revision 1.9  2002/03/04 16:05:52  rherveille
 //               Added hardware cursor support to wishbone master.
 //               Added provision to turn-off 3D cursors.
@@ -384,6 +387,7 @@ module vga_wb_slave(clk_i, rst_i, arst_i, adr_i, dat_i, dat_o, sel_i, we_i, stb_
 		);
 	`else
 		assign ccr0_dat_o = 32'h0;
+		assign cc0_dat_o = 32'h0;
 	`endif
 
 	`ifdef VGA_HWC1
@@ -403,6 +407,7 @@ module vga_wb_slave(clk_i, rst_i, arst_i, adr_i, dat_i, dat_o, sel_i, we_i, stb_
 		);
 	`else
 		assign ccr1_dat_o = 32'h0;
+		assign cc1_dat_o = 32'h0;
 	`endif
 
 	

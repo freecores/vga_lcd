@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: vga_wb_master.v,v 1.10 2002-03-28 04:59:25 rherveille Exp $
+//  $Id: vga_wb_master.v,v 1.11 2002-04-20 10:02:39 rherveille Exp $
 //
-//  $Date: 2002-03-28 04:59:25 $
-//  $Revision: 1.10 $
+//  $Date: 2002-04-20 10:02:39 $
+//  $Revision: 1.11 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.10  2002/03/28 04:59:25  rherveille
+//               Fixed two small bugs that only showed up when the hardware cursors were disabled
+//
 //               Revision 1.9  2002/03/04 16:05:52  rherveille
 //               Added hardware cursor support to wishbone master.
 //               Added provision to turn-off 3D cursors.
@@ -354,16 +357,13 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 
 	// vgate counter
 	reg  [15:0] vgate_cnt;
-	wire [16:0] vgate_cnt_val = {1'b0, vgate_cnt} -17'h1;
-	wire vdone = vgate_cnt_val[16];
+	wire vdone = ~|vgate_cnt[15:1] & vgate_cnt[0];
 
 	always@(posedge clk_i)
-		if (sclr)
-			vgate_cnt <= #1 Tvgate;
-		else if (ImDoneStrb)
+		if (sclr || ImDoneStrb)
 			vgate_cnt <= #1 Tvgate;
 		else if (hdone)
-			vgate_cnt <= #1 vgate_cnt_val[15:0];
+			vgate_cnt <= #1 vgate_cnt -16'h1;
 
 	assign ImDone = hdone & vdone;
 
@@ -641,5 +641,8 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 	assign line_fifo_wreq = rgb_fifo_rreq;
 
 endmodule
+
+
+
 
 

@@ -37,16 +37,21 @@
 
 //  CVS Log
 //
-//  $Id: vga_vtim.v,v 1.5 2002-01-28 03:47:16 rherveille Exp $
+//  $Id: vga_vtim.v,v 1.6 2002-04-20 10:02:39 rherveille Exp $
 //
-//  $Date: 2002-01-28 03:47:16 $
-//  $Revision: 1.5 $
+//  $Date: 2002-04-20 10:02:39 $
+//  $Revision: 1.6 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.5  2002/01/28 03:47:16  rherveille
+//               Changed counter-library.
+//               Changed vga-core.
+//               Added 32bpp mode.
+//
 
 `include "timescale.v"
 
@@ -74,7 +79,6 @@ module vga_vtim(clk, ena, rst, Tsync, Tgdel, Tgate, Tlen, Sync, Gate, Done);
 
 	wire Dsync, Dgdel, Dgate, Dlen;
 	reg go, drst;
-	reg hDlen, hDgate;
 
 	//
 	// module body
@@ -84,13 +88,13 @@ module vga_vtim(clk, ena, rst, Tsync, Tgdel, Tgate, Tlen, Sync, Gate, Done);
 	always@(posedge clk)
 		if (rst)
 			begin
-				go <= 1'b0;
-				drst <= 1'b1;
+				go   <= #1 1'b0;
+				drst <= #1 1'b1;
 			end
-		else if (ena)
+		else // if (ena)
 			begin
-				go <= Dlen | hDlen | (!rst & drst);
-				drst <= rst;
+				go   <= #1 Dlen | (!rst & drst);
+				drst <= #1 rst;
 			end
 
 	// hookup sync counter
@@ -145,32 +149,18 @@ module vga_vtim(clk, ena, rst, Tsync, Tgdel, Tgate, Tlen, Sync, Gate, Done);
 			.done(Dlen)
 		);
 
-	// hold dgate signal
-	always@(posedge clk)
-		if (rst)
-			hDgate <= 1'b0;
-		else
-			hDgate <= (Dgate | hDgate) & Gate;
-
-	// hold dlen signal
-	always@(posedge clk)
-		if (rst)
-			hDlen <= 1'b0;
-		else
-			hDlen <= (Dlen | hDlen) & !go;
-
 	// generate output signals
 	always@(posedge clk)
 		if (rst)
-			Sync <= 1'b0;
+			Sync <= #1 1'b0;
 		else
-			Sync <= (go | Sync) & !Dsync;
+			Sync <= #1 (go | Sync) & !Dsync;
 
 	always@(posedge clk)
 		if (rst)
-			Gate <= 1'b0;
+			Gate <= #1 1'b0;
 		else
-			Gate <= (Dgdel | Gate) & !( (Dgate | hDgate) & ena);
+			Gate <= #1 (Dgdel | Gate) & !Dgate;
 
 	assign Done = Dlen;
 endmodule
