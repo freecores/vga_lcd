@@ -10,8 +10,7 @@
 
 module vga_csm_pb (wb_clk_i, wb_rst_i, rst_nreset_i,
 		wb_adr0_i, wb_dat0_i, wb_dat0_o, wb_sel0_i, wb_we0_i, wb_stb0_i, wb_cyc0_i, wb_ack0_o, wb_err0_o,
-		wb_adr1_i, wb_dat1_i, wb_dat1_o, wb_sel1_i, wb_we1_i, wb_stb1_i, wb_cyc1_i, wb_ack1_o, wb_err1_o,
-		mem_we, mem_wadr, mem_radr, mem_d, mem_q);
+		wb_adr1_i, wb_dat1_i, wb_dat1_o, wb_sel1_i, wb_we1_i, wb_stb1_i, wb_cyc1_i, wb_ack1_o, wb_err1_o );
 		
 	//
 	// parameters
@@ -50,27 +49,21 @@ module vga_csm_pb (wb_clk_i, wb_rst_i, rst_nreset_i,
 	output                  wb_ack1_o; // acknowledge output
 	output                  wb_err1_o; // error output
 
-
-	// memory interface
-	output mem_we;                // memory write enable output
-	output [AWIDTH-1:0] mem_wadr; // memory write address output
-	output [AWIDTH-1:0] mem_radr; // memory read address output
-	reg [AWIDTH-1:0] mem_radr;
-	output [DWIDTH-1:0] mem_d;    // memory write data output
-	input  [DWIDTH-1:0] mem_q;    // memory read data input
-
 	//
 	// variable declarations
 	//
 
 	// multiplexor select signal
-	wire       wb0_acc, wb1_acc;
-	reg        dwb0_acc, dwb1_acc;
-	wire       sel_wb0, sel_wb1;
-	reg  [1:0] ack0_pipe, ack1_pipe;
+	wire wb0_acc, wb1_acc;
+	reg  dwb0_acc, dwb1_acc;
+	wire sel_wb0, sel_wb1;
+	reg  ack0, ack1;
 	
 	// acknowledge generation
 	wire wb0_ack, wb1_ack;
+
+	// memory data output
+	wire [DWIDTH -1:0] mem_q;
 
 
 	//
@@ -93,39 +86,43 @@ module vga_csm_pb (wb_clk_i, wb_rst_i, rst_nreset_i,
 	always@(posedge wb_clk_i or negedge rst_nreset_i)
 			if (!rst_nreset_i)
 				begin
-					ack0_pipe <= #1 0;
-					ack1_pipe <= #1 0;
+					ack0 <= #1 0;
+					ack1 <= #1 0;
 				end
 			else if (wb_rst_i)
 				begin
-					ack0_pipe <= #1 0;
-					ack1_pipe <= #1 0;
+					ack0 <= #1 0;
+					ack1 <= #1 0;
 				end
 			else
 				begin
-					ack0_pipe[0] <= #1 sel_wb0      && !wb0_ack;
-					ack0_pipe[1] <= #1 ack0_pipe[0] && !wb0_ack;
-
-					ack1_pipe[0] <= #1 sel_wb1      && !wb1_ack;
-					ack1_pipe[1] <= #1 ack1_pipe[0] && !wb1_ack;
+					ack0 <= #1 sel_wb0 && !wb0_ack;
+					ack1 <= #1 sel_wb1 && !wb1_ack;
 				end
 
-	assign mem_wadr = sel_wb0 ? wb_adr0_i : wb_adr1_i;
-	assign mem_d    = sel_wb0 ? wb_dat0_i : wb_dat1_i;
-	assign mem_we   = sel_wb0 ? wb_we0_i && wb_cyc0_i && wb_stb0_i : wb_we1_i && wb_cyc1_i && wb_stb1_i;
+	wire [AWIDTH -1:0] mem_adr = sel_wb0 ? wb_adr0_i : wb_adr1_i;
+	wire [DWIDTH -1:0] mem_d   = sel_wb0 ? wb_dat0_i : wb_dat1_i;
+	wire               mem_we  = sel_wb0 ? wb_we0_i && wb_cyc0_i && wb_stb0_i : wb_we1_i && wb_cyc1_i && wb_stb1_i;
 
-
-	// register memory read address
-	always@(posedge wb_clk_i)
-		mem_radr <= #1 mem_wadr;  // Altera FLEX RAMs require address to be registered with inclock for read operations
+	// hookup generic synchronous single port memory
+	generic_spram #(AWIDTH, DWIDTH) clut_mem(
+		.clk(wb_clk_i),
+		.rst(1'b0),       // no reset
+		.ce(1'b1),        // always enable memory
+		.we(mem_we),
+		.oe(1'b1),        // always output data
+		.addr(mem_adr),
+		.di(mem_d),
+		.do(mem_q)
+	);
 
 	// assign DAT_O outputs
 	assign wb_dat0_o = mem_q;
 	assign wb_dat1_o = mem_q;
 
 	// generate ack signals
-	assign wb0_ack = ( (sel_wb0 && wb_we0_i) || (ack0_pipe[1]) );
-	assign wb1_ack = ( (sel_wb1 && wb_we1_i) || (ack1_pipe[1]) );
+	assign wb0_ack = ( (sel_wb0 && wb_we0_i) || ack0 );
+	assign wb1_ack = ( (sel_wb1 && wb_we1_i) || ack1 );
 
 	// ACK outputs
 	assign wb_ack0_o = wb0_ack;
@@ -136,4 +133,3 @@ module vga_csm_pb (wb_clk_i, wb_rst_i, rst_nreset_i,
 	assign wb_err1_o = !(&wb_sel1_i) && wb_cyc1_i && wb_stb1_i;
 
 endmodule
-

@@ -3,6 +3,8 @@
 // Project: VGA
 // Author : Richard Herveille
 // rev.: 0.1 August  2nd, 2001. Initial Verilog release
+// rev.: 0.2 August 29th, 2001. Changed some sections, try to get core up to speed.
+//
 
 `include "timescale.v"
 
@@ -61,18 +63,18 @@ module vga_wb_master (CLK_I, RST_I, nRESET, CYC_O, STB_O, CAB_O, WE_O, ADR_O, SE
 	//
 	// variable declarations
 	//
-
-	wire nVen;                                                 // NOT ctrl_Ven (video enable)
 	reg vmem_acc, clut_acc;                                  // video memory access // clut access
 	wire clut_req, clut_ack;      // clut access request // clut access acknowledge
 	wire [7:0] clut_offs;                                 // clut memory offset
 	wire nvmem_req, vmem_ack;     // NOT video memory access request // video memory access acknowledge
 	wire ImDoneStrb;              // image done (strobe signal)
 	reg  dImDoneStrb;
-	wire pixelbuf_rreq, pixelbuf_empty, pixelbuf_empty_flush, pixelbuf_flush, pixelbuf_hfull;
+	wire pixelbuf_rreq, pixelbuf_empty, pixelbuf_hfull;
 	wire [31:0] pixelbuf_q;
 	wire RGBbuf_wreq, RGBbuf_empty, RGBbuf_full, RGB_fifo_full;
-	reg  RGBbuf_rreq, fill_RGBfifo;
+//	reg  RGBbuf_rreq, fill_RGBfifo;
+	reg  fill_RGBfifo;
+	wire RGBbuf_rreq;
 	wire [23:0] RGBbuf_d;
 
 	//
@@ -86,6 +88,7 @@ module vga_wb_master (CLK_I, RST_I, nRESET, CYC_O, STB_O, CAB_O, WE_O, ADR_O, SE
 	reg  [ 2:0] burst_cnt;                       // video memory burst access counter
 	wire        ImDone;                          // Done reading image from video mem 
 	reg         dImDone;                         // delayed ImDone
+	reg         hImDone;
 	wire        burst_done;                      // completed burst access to video mem
 	reg         sel_VBA, sel_CBA;                // select video memory base address // select clut base address
 	reg  [31:2] vmemA;                           // video memory address 
@@ -193,6 +196,12 @@ module vga_wb_master (CLK_I, RST_I, nRESET, CYC_O, STB_O, CAB_O, WE_O, ADR_O, SE
 		dImDoneStrb <= #1 ImDoneStrb;
 	end
 
+	always@(posedge CLK_I)
+		if (!ctrl_ven)
+			hImDone <= #1 1'b0;
+		else
+			hImDone <= #1 (ImDone || hImDone) && vmem_acc && !(burst_done && vmem_ack);
+
 	//
 	// generate addresses
 	//
@@ -240,15 +249,21 @@ module vga_wb_master (CLK_I, RST_I, nRESET, CYC_O, STB_O, CAB_O, WE_O, ADR_O, SE
 					WE_O  <= #1 1'b0; // read only
 				end
 
-	assign nVen = !ctrl_ven;
-	assign pixelbuf_flush = nVen | ImDoneStrb;
-
 	// pixel buffer (temporary store data read from video memory)
-	vga_fifo #(4, 32) pixel_buf (.clk(CLK_I), .aclr(1'b1), .sclr(pixelbuf_flush), .d(DAT_I), .wreq(vmem_ack), .q(pixelbuf_q),
-		.rreq(pixelbuf_rreq), .empty(pixelbuf_empty), .hfull(pixelbuf_hfull), .full() );
+	vga_fifo #(4, 32) pixel_buf (
+		.clk(CLK_I),
+		.aclr(1'b1),
+		.sclr(!ctrl_ven || hImDone || ImDoneStrb),
+		.d(DAT_I),
+		.wreq(vmem_ack),
+		.q(pixelbuf_q),
+		.rreq(pixelbuf_rreq),
+		.empty(pixelbuf_empty),
+		.hfull(pixelbuf_hfull),
+		.full()
+	);
 
-	assign nvmem_req = !(!pixelbuf_hfull & !ImDoneStrb);
-	assign pixelbuf_empty_flush = pixelbuf_empty | pixelbuf_flush;
+	assign nvmem_req = !(!pixelbuf_hfull && !(ImDoneStrb || hImDone) );
 
 	always@(posedge CLK_I)
 		if (!ctrl_ven)
@@ -259,25 +274,58 @@ module vga_wb_master (CLK_I, RST_I, nRESET, CYC_O, STB_O, CAB_O, WE_O, ADR_O, SE
 	assign RGB_fifo_full = !(fill_RGBfifo & !RGBbuf_full);
 
 	// hookup color processor
-	vga_colproc color_proc (.clk(CLK_I), .ctrl_ven(ctrl_ven), .pixel_buffer_di(pixelbuf_q), .wb_di(DAT_I), .ColorDepth(ctrl_cd),
-		.PseudoColor(ctrl_pc), .pixel_buffer_empty(pixelbuf_empty_flush), .pixel_buffer_rreq(pixelbuf_rreq),
-		.RGB_fifo_full(RGB_fifo_full), .RGB_fifo_wreq(RGBbuf_wreq), .R(RGBbuf_d[23:16]), .G(RGBbuf_d[15:8]), .B(RGBbuf_d[7:0]),
-		.clut_req(clut_req), .clut_offs(clut_offs), .clut_ack(clut_ack) );
+	vga_colproc color_proc (
+		.clk(CLK_I),
+		.srst(!ctrl_ven || (ImDoneStrb && !clut_acc) ),
+		.pixel_buffer_di(pixelbuf_q),
+		.wb_di(DAT_I),
+		.ColorDepth(ctrl_cd),
+		.PseudoColor(ctrl_pc),
+		.pixel_buffer_empty(pixelbuf_empty),
+		.pixel_buffer_rreq(pixelbuf_rreq),
+		.RGB_fifo_full(RGB_fifo_full),
+		.RGB_fifo_wreq(RGBbuf_wreq),
+		.R(RGBbuf_d[23:16]),
+		.G(RGBbuf_d[15:8]),
+		.B(RGBbuf_d[7:0]),
+		.clut_req(clut_req),
+		.clut_offs(clut_offs),
+		.clut_ack(clut_ack)
+	);
 
 	// hookup RGB buffer (temporary station between WISHBONE-clock-domain and pixel-clock-domain)
-	vga_fifo #(3, 24) RGB_buf (.clk(CLK_I), .aclr(1'b1), .sclr(nVen), .d(RGBbuf_d), .wreq(RGBbuf_wreq), .q(line_fifo_d), .rreq(RGBbuf_rreq),
-		.empty(RGBbuf_empty), .hfull(RGBbuf_full), .full() );
+	vga_fifo #(3, 24) RGB_buf (
+		.clk(CLK_I),
+		.aclr(1'b1),
+		.sclr(!ctrl_ven),
+		.d(RGBbuf_d),
+		.wreq(RGBbuf_wreq),
+		.q(line_fifo_d),
+		.rreq(RGBbuf_rreq),
+		.empty(RGBbuf_empty),
+		.hfull(RGBbuf_full),
+		.full()
+	);
 
 	// generate signals for line-fifo
+	/*
 	always@(posedge CLK_I)
 		if (!ctrl_ven)
 			RGBbuf_rreq <= #1 1'b0;
 		else
 			RGBbuf_rreq <= #1 !line_fifo_full & !RGBbuf_empty & !RGBbuf_rreq;
+	*/
 
+	assign RGBbuf_rreq = !line_fifo_full && !RGBbuf_empty;
 	assign line_fifo_wreq = RGBbuf_rreq;
 
 endmodule
+
+
+
+
+
+
 
 
 

@@ -3,17 +3,18 @@
 // Project: VGA
 // Author : Richard Herveille. Ideas and thoughts: Sherif Taher Eid
 // rev. 1.0 August  2nd, 2001. Initial Verilog release
+// rev. 1.1 August 29th, 2001. Changed statemachine to increase bandwidth.
 //
 
 `include "timescale.v"
 
-module vga_colproc(clk, ctrl_ven, pixel_buffer_di, wb_di, ColorDepth, PseudoColor, 
+module vga_colproc(clk, srst, pixel_buffer_di, wb_di, ColorDepth, PseudoColor, 
 						pixel_buffer_empty, pixel_buffer_rreq, RGB_fifo_full,
 						RGB_fifo_wreq, R, G, B, clut_req, clut_offs, clut_ack);
 
 	// inputs & outputs
 	input clk;                    // master clock
-	input ctrl_ven;               // Video Enable
+	input srst;                   // synchronous reset
 
 	input [31:0] pixel_buffer_di; // Pixel Buffer data input
 	input [31:0] wb_di;           // wishbone data input
@@ -102,13 +103,19 @@ module vga_colproc(clk, ctrl_ven, pixel_buffer_di, wb_di, ColorDepth, PseudoColo
 			// 8 bits per pixel
 			//
 			bw_8bpp:
-				if (!RGB_fifo_full & !(|colcnt) )
-					nxt_state = idle;
+				if (!RGB_fifo_full && !(|colcnt) )
+					if (!pixel_buffer_empty)
+						nxt_state = fill_buf;
+					else
+						nxt_state = idle;
 
 			col_8bpp:
-				if (!RGB_fifo_full & !(|colcnt) )
+				if (!RGB_fifo_full && !(|colcnt) )
 					if (clut_ack)
-						nxt_state = idle;
+						if (!pixel_buffer_empty)
+							nxt_state = fill_buf;
+						else
+							nxt_state = idle;
 
 			//
 			// 16 bits per pixel
@@ -119,7 +126,10 @@ module vga_colproc(clk, ctrl_ven, pixel_buffer_di, wb_di, ColorDepth, PseudoColo
 
 			col_16bpp_b:
 				if (!RGB_fifo_full)
-					nxt_state = idle;
+					if (!pixel_buffer_empty)
+						nxt_state = fill_buf;
+					else
+						nxt_state = idle;
 
 			//
 			// 24 bits per pixel
@@ -128,6 +138,8 @@ module vga_colproc(clk, ctrl_ven, pixel_buffer_di, wb_di, ColorDepth, PseudoColo
 				if (!RGB_fifo_full)
 					if (colcnt == 2'h1) // (colcnt == 1)
 						nxt_state = col_24bpp; // stay in current state
+					else if (!pixel_buffer_empty)
+						nxt_state = fill_buf;
 					else
 						nxt_state = idle;
 
@@ -136,7 +148,7 @@ module vga_colproc(clk, ctrl_ven, pixel_buffer_di, wb_di, ColorDepth, PseudoColo
 
 	// generate state registers
 	always@(posedge clk)
-			if (!ctrl_ven)
+			if (srst)
 				c_state <= #1 idle;
 			else
 				c_state <= #1 nxt_state;
@@ -173,7 +185,12 @@ module vga_colproc(clk, ctrl_ven, pixel_buffer_di, wb_di, ColorDepth, PseudoColo
 			bw_8bpp:
 			begin
 				if (!RGB_fifo_full)
-					RGBbuf_wreq = 1'b1;
+					begin
+						RGBbuf_wreq = 1'b1;
+
+						if ( (!pixel_buffer_empty) && !(|colcnt) )
+							pixelbuf_rreq = 1'b1;
+					end
 
 				case (colcnt) // synopsis full_case parallel_case
 					2'b11:
@@ -209,7 +226,12 @@ module vga_colproc(clk, ctrl_ven, pixel_buffer_di, wb_di, ColorDepth, PseudoColo
 			col_8bpp:
 			begin
 				if (!RGB_fifo_full & clut_ack)
-					RGBbuf_wreq =1'b1;
+					begin
+						RGBbuf_wreq = 1'b1;
+
+						if ( (!pixel_buffer_empty) && !(|colcnt) )
+							pixelbuf_rreq = 1'b1;
+					end
 
 				iR = wb_di[23:16];
 				iG = wb_di[15: 8];
@@ -217,7 +239,7 @@ module vga_colproc(clk, ctrl_ven, pixel_buffer_di, wb_di, ColorDepth, PseudoColo
 
 				clut_acc = ~RGB_fifo_full;
 
-				if ( !(|colcnt) & clut_ack)
+				if ( !(|colcnt) && clut_ack)
 					clut_acc =1'b0;
 			end
 
@@ -237,7 +259,12 @@ module vga_colproc(clk, ctrl_ven, pixel_buffer_di, wb_di, ColorDepth, PseudoColo
 			col_16bpp_b:
 			begin
 				if (!RGB_fifo_full)
-					RGBbuf_wreq = 1'b1;
+					begin
+						RGBbuf_wreq = 1'b1;
+
+						if (!pixel_buffer_empty)
+							pixelbuf_rreq = 1'b1;
+					end
 
 				iR[7:3] = DataBuffer[15:11];
 				iG[7:2] = DataBuffer[10: 5];
@@ -250,7 +277,13 @@ module vga_colproc(clk, ctrl_ven, pixel_buffer_di, wb_di, ColorDepth, PseudoColo
 			col_24bpp:
 			begin
 				if (!RGB_fifo_full)
-					RGBbuf_wreq = 1'b1;
+					begin
+						RGBbuf_wreq = 1'b1;
+
+						if ( (colcnt != 2'h1) && !pixel_buffer_empty)
+							pixelbuf_rreq = 1'b1;
+					end
+
 
 				case (colcnt) // synopsis full_case parallel_case
 					2'b11:
@@ -306,7 +339,7 @@ module vga_colproc(clk, ctrl_ven, pixel_buffer_di, wb_di, ColorDepth, PseudoColo
 					Ga <= #1 iGa;
 				end
 
-			if (!ctrl_ven)
+			if (srst)
 				begin
 					pixel_buffer_rreq <= #1 1'b0;
 					RGB_fifo_wreq <= #1 1'b0;
@@ -334,10 +367,22 @@ module vga_colproc(clk, ctrl_ven, pixel_buffer_di, wb_di, ColorDepth, PseudoColo
 	// color counter
 	//
 	always@(posedge clk)
-		if(!ctrl_ven)
+		if(srst)
 			colcnt <= #1 2'b11;
 		else if (RGBbuf_wreq)
 			colcnt <= #1 colcnt -2'h1;
 
 endmodule
+
+
+
+
+
+
+
+
+
+
+
+
 

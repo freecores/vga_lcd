@@ -228,7 +228,3 @@ module vga_wb_slave(CLK_I, RST_I, nRESET, ADR_I, DAT_I, DAT_O, SEL_I, WE_I, STB_
 	// generate interrupt request signal
 	assign INTA_O = (HINT & hie) | (VINT & vie) | (BSINT & bsie) | LUINT | SINT;
 endmodule
-
-
-
-

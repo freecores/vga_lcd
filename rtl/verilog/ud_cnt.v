@@ -55,4 +55,3 @@ module ud_cnt (clk, nReset, rst, cnt_en, ud, nld, d, q, resd, rci, rco);
 	assign q = Qi;
 	assign rco = val[SIZE];
 endmodule
-

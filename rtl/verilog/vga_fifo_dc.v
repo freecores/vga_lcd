@@ -2,42 +2,36 @@
 // File vga_fifo_dc.v (dual clocked fifo)
 // Author : Richard Herveille
 //          
-//          WARNING: DO NOT CHANGE THIS FILE
-//                   CHANGE "DPM.V" FOR TARGET SPECIFIC MEMORY BLOCKS
-//
 // rev. 0.1 August  2nd, 2001. Initial Verilog release
 //
 
 `include "timescale.v"
 
-module vga_fifo_dc (rclk, wclk, aclr, wreq, rreq, rd_empty,
-		rd_full, wr_empty, wr_full, rptr, wptr);
+module vga_fifo_dc (rclk, wclk, aclr, wreq, d, rreq, q, rd_empty, rd_full, wr_empty, wr_full);
+
 	// parameters
-	parameter AWIDTH = 7; //128 entries
+	parameter AWIDTH = 7;  //128 entries
+	parameter DWIDTH = 16; //16bit databus
 
 	// inputs & outputs
 	input rclk;             // read clock
 	input wclk;             // write clock
 	input aclr;             // active low asynchronous clear
 	input wreq;             // write request
+	input [DWIDTH -1:0] d;  // data input
 	input rreq;             // read request
+	output [DWIDTH -1:0] q; // data output
 
 	output rd_empty;        // FIFO is empty, synchronous to read clock
-	output rd_full;         // FIFO is full, synchronous to read clock
-	output wr_empty;        // FIFO is empty, synchronous to write clock
-	output wr_full;         // FIFO is full, synchronous to write clock
-
-	// Dualported Memory Interface
-	output [AWIDTH -1:0] rptr, wptr;
-
 	reg rd_empty;
+	output rd_full;         // FIFO is full, synchronous to read clock
 	reg rd_full;
+	output wr_empty;        // FIFO is empty, synchronous to write clock
 	reg wr_empty;
+	output wr_full;         // FIFO is full, synchronous to write clock
 	reg wr_full;
 
 	// variable declarations
-	parameter DEPTH = 1 << AWIDTH;
-
 	reg [AWIDTH -1:0] rptr, wptr;
 	wire ifull, iempty;
 	reg rempty, rfull, wempty, wfull;
@@ -72,7 +66,7 @@ module vga_fifo_dc (rclk, wclk, aclr, wreq, rreq, rd_empty,
 	assign tmp = wptr - rptr;
 	assign iempty = (rptr == wptr) ? 1'b1 : 1'b0;
 
-	assign tmp2 = DEPTH -3;
+	assign tmp2 = (1 << AWIDTH) -3;
 	assign ifull  = ( tmp >= tmp2 ) ? 1'b1 : 1'b0;
 
 	// rdclk flags
@@ -109,6 +103,20 @@ module vga_fifo_dc (rclk, wclk, aclr, wreq, rreq, rd_empty,
 				wr_full  <= #1 wfull;
 			end
 
+	// hookup generic dual ported memory
+	generic_dpram #(AWIDTH, DWIDTH) fifo_dc_mem(
+		.rclk(rclk),
+		.rrst(1'b0),
+		.rce(1'b1),
+		.oe(1'b1),
+		.raddr(rptr),
+		.do(q),
+		.wclk(wclk),
+		.wrst(1'b0),
+		.wce(1'b1),
+		.we(wreq),
+		.waddr(wptr),
+		.di(d)
+	);
+
 endmodule
-
-

@@ -11,8 +11,7 @@ module vga_top (wb_clk_i, wb_rst_i, rst_nreset_i, wb_inta_o,
 		wb_adr_i, wb_sdat_i, wb_sdat_o, wb_sel_i, wb_we_i, wb_stb_i, wb_cyc_i, wb_ack_o, wb_err_o, 
 		wb_adr_o,	wb_mdat_i, wb_cab_o,  wb_sel_o, wb_we_o, wb_stb_o, wb_cyc_o, wb_ack_i, wb_err_i,
 		clk_pclk_i, vga_hsync_pad_o, vga_vsync_pad_o, vga_csync_pad_o, vga_blank_pad_o,
-		vga_r_pad_o, vga_g_pad_o, vga_b_pad_o,
-		line_fifo_dpm_wreq, line_fifo_dpm_d, line_fifo_dpm_q, line_fifo_dpm_wptr, line_fifo_dpm_rptr);
+		vga_r_pad_o, vga_g_pad_o, vga_b_pad_o);
 
 	//
 	// parameters
@@ -63,12 +62,6 @@ module vga_top (wb_clk_i, wb_rst_i, rst_nreset_i, wb_inta_o,
 	reg vga_blank_pad_o;
 	output [ 7:0] vga_r_pad_o, vga_g_pad_o, vga_b_pad_o; // RGB color signals
 
-	// line fifo dual ported memory connections
-	output	                      	line_fifo_dpm_wreq;
-	output	[23:0]                	line_fifo_dpm_d;
-	input 	[23:0]	                line_fifo_dpm_q;
-	output	[LINE_FIFO_AWIDTH-1:0]	line_fifo_dpm_wptr, line_fifo_dpm_rptr;
-
 	//
 	// variable declarations
 	//
@@ -89,6 +82,9 @@ module vga_top (wb_clk_i, wb_rst_i, rst_nreset_i, wb_inta_o,
 	wire cgate; // composite gate signal
 	wire ihsync, ivsync, icsync, iblank; // intermediate horizontal/vertical/composite sync, intermediate blank
 
+	// line fifo connections
+	wire line_fifo_dpm_wreq;
+	wire [23:0] line_fifo_dpm_d, line_fifo_dpm_q;
 	//
 	// Module body
 	//
@@ -218,19 +214,19 @@ module vga_top (wb_clk_i, wb_rst_i, rst_nreset_i, wb_inta_o,
 	end
 
 	// hookup line-fifo
-	vga_fifo_dc #(LINE_FIFO_AWIDTH) u4 (
-			.rclk(clk_pclk_i),
-			.wclk(wb_clk_i),
-			.aclr(ctrl_ven),
-			.wreq(line_fifo_dpm_wreq),
-			.rreq(cgate),
-			.rd_empty(line_fifo_empty_rd),
-			.rd_full(),
-			.wr_empty(),
-			.wr_full(line_fifo_full_wr),
-			.rptr(line_fifo_dpm_rptr),
-			.wptr(line_fifo_dpm_wptr)
-			);
+	vga_fifo_dc #(LINE_FIFO_AWIDTH, 24) u4 (
+		.rclk(clk_pclk_i),
+		.wclk(wb_clk_i),
+		.aclr(ctrl_ven),
+		.wreq(line_fifo_dpm_wreq),
+		.d(line_fifo_dpm_d),
+		.rreq(cgate),
+		.q(line_fifo_dpm_q),
+		.rd_empty(line_fifo_empty_rd),
+		.rd_full(),
+		.wr_empty(),
+		.wr_full(line_fifo_full_wr)
+	);
 
 	assign vga_r_pad_o = line_fifo_dpm_q[23:16];
 	assign vga_g_pad_o = line_fifo_dpm_q[15: 8];
@@ -265,5 +261,4 @@ module vga_top (wb_clk_i, wb_rst_i, rst_nreset_i, wb_inta_o,
 			end
 
 endmodule
-
 

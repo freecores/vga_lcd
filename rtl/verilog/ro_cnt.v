@@ -1,5 +1,4 @@
 //
-// Counter.v, contains 1) run-once down-counter  2) general purpose up-down riple-carry counter
 //
 // Author: Richard Herveille
 // Rev. 1.0 June 27th, 2001. Initial Verilog release

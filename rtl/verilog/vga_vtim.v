@@ -76,8 +76,3 @@ module vga_vtim(clk, ena, rst, Tsync, Tgdel, Tgate, Tlen, Sync, Gate, Done);
 
 	assign Done = Dlen;
 endmodule
-
-
-
-
-

@@ -1,7 +1,8 @@
 //
 // File fifo.v (universal FIFO)
 // Author : Richard Herveille
-// rev.: 1.0 August 7th, 2001. Initial Verilog release
+// rev.: 1.0 August  7th, 2001. Initial Verilog release
+// rev.: 1.1 August 29th, 2001. Created asynchronous 'q' output. Try to get the core up to speed.
 
 `include "timescale.v"
 
@@ -10,12 +11,14 @@ module vga_fifo (clk, aclr, sclr, d, wreq, q, rreq, empty, hfull, full);
 	//
 	// parameters
 	//
+
 	parameter AWIDTH = 7;  // 128 entries
 	parameter DWIDTH = 32; // 32bits data
 
 	//
 	// inputs & outputs
 	//
+
 	input clk; // clock input
 	input aclr; // active low asynchronous clear
 	input sclr; // active high synchronous clear
@@ -24,7 +27,7 @@ module vga_fifo (clk, aclr, sclr, d, wreq, q, rreq, empty, hfull, full);
 	input wreq;            // write request
 
 	output [DWIDTH -1:0] q; // data output
-	reg [DWIDTH -1:0] q;
+//	reg [DWIDTH -1:0] q;
 	input  rreq;            // read request
 
 	output empty;           // fifo is empty
@@ -65,14 +68,22 @@ module vga_fifo (clk, aclr, sclr, d, wreq, q, rreq, empty, hfull, full);
 			wptr <= #1 wptr + 1;
 
 	// memory array operations
+	/*
 	always@(posedge clk)
 		begin
 			if (wreq)
 				mem[wptr] <= #1 d;
-			
-			q <= #1 mem[rptr];
-		end
 
+			q <= #1 mem[rptr];
+		
+		end
+	*/
+	always@(posedge clk)
+		if (wreq)
+			mem[wptr] <= #1 d;
+
+	assign q = mem[rptr];
+	
 	// number of words in fifo
 	always@(posedge clk or negedge aclr)
 		if (!aclr)
@@ -92,3 +103,5 @@ module vga_fifo (clk, aclr, sclr, d, wreq, q, rreq, empty, hfull, full);
 	assign hfull = fifo_cnt[AWIDTH -1];
 	assign full  = fifo_cnt[AWIDTH];
 endmodule
+
+

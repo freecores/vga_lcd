@@ -51,13 +51,31 @@ module vga_tgen(clk, rst, HSyncL, Thsync, Thgdel, Thgate, Thlen, VSyncL, Tvsync,
 	//
 
 	// hookup horizontal timing generator
-	vga_vtim hor_gen(.clk(clk), .ena(1'b1), .rst(rst), .Tsync(Thsync), .Tgdel(Thgdel),
-		.Tgate(Thgate), .Tlen(Thlen), .Sync(iHsync), .Gate(Hgate), .Done(Hdone));
+	vga_vtim hor_gen(
+		.clk(clk),
+		.ena(1'b1),
+		.rst(rst),
+		.Tsync(Thsync),
+		.Tgdel(Thgdel),
+		.Tgate(Thgate),
+		.Tlen(Thlen),
+		.Sync(iHsync),
+		.Gate(Hgate),
+		.Done(Hdone));
 
 
 	// hookup vertical timing generator
-	vga_vtim ver_gen(.clk(clk), .ena(Hdone), .rst(rst), .Tsync(Tvsync), .Tgdel(Tvgdel),
-		.Tgate(Tvgate), .Tlen(Tvlen), .Sync(iVsync), .Gate(Vgate), .Done(eof));
+	vga_vtim ver_gen(
+		.clk(clk),
+		.ena(Hdone),
+		.rst(rst),
+		.Tsync(Tvsync),
+		.Tgdel(Tvgdel),
+		.Tgate(Tvgate),
+		.Tlen(Tvlen),
+		.Sync(iVsync),
+		.Gate(Vgate),
+		.Done(eof));
 
 	// assign outputs
 	assign eol  = Hdone;
@@ -68,4 +86,3 @@ module vga_tgen(clk, rst, HSyncL, Thsync, Thgdel, Thgate, Thlen, VSyncL, Tvsync,
 	assign Csync = (iHsync | iVsync) ^ CSyncL;
 	assign Blank = !(gate ^ BlankL);
 endmodule
-
