@@ -68,16 +68,6 @@ module vga_fifo (clk, aclr, sclr, d, wreq, q, rreq, empty, hfull, full);
 			wptr <= #1 wptr + 1;
 
 	// memory array operations
-	/*
-	always@(posedge clk)
-		begin
-			if (wreq)
-				mem[wptr] <= #1 d;
-
-			q <= #1 mem[rptr];
-		
-		end
-	*/
 	always@(posedge clk)
 		if (wreq)
 			mem[wptr] <= #1 d;
@@ -103,5 +93,3 @@ module vga_fifo (clk, aclr, sclr, d, wreq, q, rreq, empty, hfull, full);
 	assign hfull = fifo_cnt[AWIDTH -1];
 	assign full  = fifo_cnt[AWIDTH];
 endmodule
-
-

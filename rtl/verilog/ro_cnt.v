@@ -40,7 +40,7 @@ module ro_cnt (clk, nReset, rst, cnt_en, go, done, d, q, id);
 			rci <= #1 1'b0;
 		else if (rst)
 			rci <= #1 1'b0;
-		else if (cnt_en)
+		else //if (cnt_en)
 			rci <= #1 (go | rci) & !rco;
 
 	assign nld = !go;
@@ -52,3 +52,6 @@ module ro_cnt (clk, nReset, rst, cnt_en, go, done, d, q, id);
 	// assign outputs
 	assign done = rco;
 endmodule
+
+
+

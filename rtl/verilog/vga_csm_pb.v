@@ -1,16 +1,14 @@
 //
-// Wishbone compliant cycle shared memory, priority based selection
+// Cycle shared memory, priority based selection (port0 has higher priority than port1)
 // author: Richard Herveille
 // 
-// rev.: 1.0  August 13th, 2001. Initial Verilog release
-//
+// rev.: 1.0  August  13th, 2001. Initial Verilog release
+// rev.: 1.1  October  2nd, 2001. Removed wishbone interface
 // 
 
 `include "timescale.v"
 
-module vga_csm_pb (wb_clk_i, wb_rst_i, rst_nreset_i,
-		wb_adr0_i, wb_dat0_i, wb_dat0_o, wb_sel0_i, wb_we0_i, wb_stb0_i, wb_cyc0_i, wb_ack0_o, wb_err0_o,
-		wb_adr1_i, wb_dat1_i, wb_dat1_o, wb_sel1_i, wb_we1_i, wb_stb1_i, wb_cyc1_i, wb_ack1_o, wb_err1_o );
+module vga_csm_pb (clk_i, req0_i, ack0_o, adr0_i, dat0_i, dat0_o, we0_i, req1_i, ack1_o, adr1_i, dat1_i, dat1_o, we1_i);
 		
 	//
 	// parameters
@@ -22,46 +20,34 @@ module vga_csm_pb (wb_clk_i, wb_rst_i, rst_nreset_i,
 	// inputs & outputs
 	//
 	
-	// syscon signals
-	input wb_clk_i;     // wishbone clock input
-	input wb_rst_i;     // wishbone active high synchronous reset input
-	input rst_nreset_i; // active low asynchronous input
+	input clk_i;                    // clock input
 
 	// wishbone slave0 connections
-	input  [ AWIDTH   -1:0] wb_adr0_i; // address input
-	input  [ DWIDTH   -1:0] wb_dat0_i; // data input
-	output [ DWIDTH   -1:0] wb_dat0_o; // data output
-	input  [(DWIDTH/8)-1:0] wb_sel0_i; // byte select input
-	input                   wb_we0_i;  // write enable input
-	input                   wb_stb0_i; // strobe/select input
-	input                   wb_cyc0_i; // valid bus cycle input
-	output                  wb_ack0_o; // acknowledge output
-	output                  wb_err0_o; // error output
+	input  [ AWIDTH   -1:0] adr0_i; // address input
+	input  [ DWIDTH   -1:0] dat0_i; // data input
+	output [ DWIDTH   -1:0] dat0_o; // data output
+	input                   we0_i;  // write enable input
+	input                   req0_i; // access request input
+	output                  ack0_o; // access acknowledge output
 
 	// wishbone slave1 connections
-	input  [ AWIDTH   -1:0] wb_adr1_i; // address input
-	input  [ DWIDTH   -1:0] wb_dat1_i; // data input
-	output [ DWIDTH   -1:0] wb_dat1_o; // data output
-	input  [(DWIDTH/8)-1:0] wb_sel1_i; // byte select input
-	input                   wb_we1_i;  // write enable input
-	input                   wb_stb1_i; // strobe/select input
-	input                   wb_cyc1_i; // valid bus cycle input
-	output                  wb_ack1_o; // acknowledge output
-	output                  wb_err1_o; // error output
+	input  [ AWIDTH   -1:0] adr1_i; // address input
+	input  [ DWIDTH   -1:0] dat1_i; // data input
+	output [ DWIDTH   -1:0] dat1_o; // data output
+	input                   we1_i;  // write enable input
+	input                   req1_i; // access request input
+	output                  ack1_o; // access acknowledge output
 
 	//
 	// variable declarations
 	//
 
 	// multiplexor select signal
-	wire wb0_acc, wb1_acc;
-	reg  dwb0_acc, dwb1_acc;
-	wire sel_wb0, sel_wb1;
+	wire acc0, acc1;
+	reg  dacc0, dacc1;
+	wire sel0, sel1;
 	reg  ack0, ack1;
 	
-	// acknowledge generation
-	wire wb0_ack, wb1_ack;
-
 	// memory data output
 	wire [DWIDTH -1:0] mem_q;
 
@@ -71,42 +57,31 @@ module vga_csm_pb (wb_clk_i, wb_rst_i, rst_nreset_i,
 	//
 
 	// generate multiplexor select signal
-	assign wb0_acc = wb_cyc0_i && wb_stb0_i;
-	assign wb1_acc = wb_cyc1_i && wb_stb1_i && !sel_wb0;
+	assign acc0 = req0_i;
+	assign acc1 = req1_i && !sel0;
 
-	always@(posedge wb_clk_i)
+	always@(posedge clk_i)
 		begin
-			dwb0_acc <= #1 wb0_acc & !wb0_ack;
-			dwb1_acc <= #1 wb1_acc & !wb1_ack;
+			dacc0 <= #1 acc0 & !ack0_o;
+			dacc1 <= #1 acc1 & !ack1_o;
 		end
 
-	assign sel_wb0 = wb0_acc && !dwb0_acc;
-	assign sel_wb1 = wb1_acc && !dwb1_acc;
+	assign sel0 = acc0 && !dacc0;
+	assign sel1 = acc1 && !dacc1;
 
-	always@(posedge wb_clk_i or negedge rst_nreset_i)
-			if (!rst_nreset_i)
-				begin
-					ack0 <= #1 0;
-					ack1 <= #1 0;
-				end
-			else if (wb_rst_i)
-				begin
-					ack0 <= #1 0;
-					ack1 <= #1 0;
-				end
-			else
-				begin
-					ack0 <= #1 sel_wb0 && !wb0_ack;
-					ack1 <= #1 sel_wb1 && !wb1_ack;
-				end
+	always@(posedge clk_i)
+		begin
+			ack0 <= #1 sel0 && !ack0_o;
+			ack1 <= #1 sel1 && !ack1_o;
+		end
 
-	wire [AWIDTH -1:0] mem_adr = sel_wb0 ? wb_adr0_i : wb_adr1_i;
-	wire [DWIDTH -1:0] mem_d   = sel_wb0 ? wb_dat0_i : wb_dat1_i;
-	wire               mem_we  = sel_wb0 ? wb_we0_i && wb_cyc0_i && wb_stb0_i : wb_we1_i && wb_cyc1_i && wb_stb1_i;
+	wire [AWIDTH -1:0] mem_adr = sel0 ? adr0_i : adr1_i;
+	wire [DWIDTH -1:0] mem_d   = sel0 ? dat0_i : dat1_i;
+	wire               mem_we  = sel0 ? req0_i && we0_i : req1_i && we1_i;
 
 	// hookup generic synchronous single port memory
 	generic_spram #(AWIDTH, DWIDTH) clut_mem(
-		.clk(wb_clk_i),
+		.clk(clk_i),
 		.rst(1'b0),       // no reset
 		.ce(1'b1),        // always enable memory
 		.we(mem_we),
@@ -117,19 +92,12 @@ module vga_csm_pb (wb_clk_i, wb_rst_i, rst_nreset_i,
 	);
 
 	// assign DAT_O outputs
-	assign wb_dat0_o = mem_q;
-	assign wb_dat1_o = mem_q;
+	assign dat0_o = mem_q;
+	assign dat1_o = mem_q;
 
-	// generate ack signals
-	assign wb0_ack = ( (sel_wb0 && wb_we0_i) || ack0 );
-	assign wb1_ack = ( (sel_wb1 && wb_we1_i) || ack1 );
-
-	// ACK outputs
-	assign wb_ack0_o = wb0_ack;
-	assign wb_ack1_o = wb1_ack;
-
-	// ERR outputs
-	assign wb_err0_o = !(&wb_sel0_i) && wb_cyc0_i && wb_stb0_i;
-	assign wb_err1_o = !(&wb_sel1_i) && wb_cyc1_i && wb_stb1_i;
-
+	// generate ack outputs
+	assign ack0_o = ( (sel0 && we0_i) || ack0 );
+	assign ack1_o = ( (sel1 && we1_i) || ack1 );
 endmodule
+
+

@@ -31,6 +31,7 @@ module vga_vtim(clk, ena, rst, Tsync, Tgdel, Tgate, Tlen, Sync, Gate, Done);
 
 	wire Dsync, Dgdel, Dgate, Dlen;
 	reg go, drst;
+	reg hDlen, hDgate;
 
 	//
 	// module body
@@ -45,7 +46,7 @@ module vga_vtim(clk, ena, rst, Tsync, Tgdel, Tgate, Tlen, Sync, Gate, Done);
 			end
 		else if (ena)
 			begin
-				go <= Dlen | (!rst & drst);
+				go <= Dlen | hDlen | (!rst & drst);
 				drst <= rst;
 			end
 
@@ -58,21 +59,43 @@ module vga_vtim(clk, ena, rst, Tsync, Tgdel, Tgate, Tlen, Sync, Gate, Done);
 	// hookup gate counter
 	ro_cnt #(16) gate_cnt (.clk(clk), .rst(rst), .nReset(1'b1), .cnt_en(ena), .go(Dgdel), .d(Tgate), .id(Tgate), .q(), .done(Dgate));
 
-	// hookup gate counter
+	// hookup length counter
 	ro_cnt #(16) len_cnt (.clk(clk), .rst(rst), .nReset(1'b1), .cnt_en(ena), .go(go), .d(Tlen), .id(Tlen), .q(), .done(Dlen));
+
+	// hold dgate signal
+	always@(posedge clk)
+		if (rst)
+			hDgate <= 1'b0;
+		else
+			hDgate <= (Dgate | hDgate) & Gate;
+
+	// hold dlen signal
+	always@(posedge clk)
+		if (rst)
+			hDlen <= 1'b0;
+		else
+			hDlen <= (Dlen | hDlen) & !go;
 
 	// generate output signals
 	always@(posedge clk)
 		if (rst)
 			Sync <= 1'b0;
 		else
-			Sync <= (go | Sync)  & !Dsync;
+			Sync <= (go | Sync) & !Dsync;
 
 	always@(posedge clk)
 		if (rst)
 			Gate <= 1'b0;
 		else
-			Gate <= (Dgdel | Gate) & !Dgate;
+			Gate <= (Dgdel | Gate) & !( (Dgate | hDgate) & ena);
 
 	assign Done = Dlen;
 endmodule
+
+
+
+
+
+
+
+

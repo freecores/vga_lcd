@@ -2,38 +2,41 @@
 // File wb_master.v, WISHBONE MASTER interface (video-memory/clut memory)
 // Project: VGA
 // Author : Richard Herveille
-// rev.: 0.1 August  2nd, 2001. Initial Verilog release
-// rev.: 0.2 August 29th, 2001. Changed some sections, try to get core up to speed.
+// rev.: 0.1 August   2nd, 2001. Initial Verilog release
+// rev.: 0.2 August  29th, 2001. Changed some sections, try to get core up to speed.
+// rev.: 1.0 October  2nd, 2001. Revised core. Moved clut-memory into color-processor. Removed all references to clut-accesses from wishbone master.
+//                               Changed video memory address generation.
 //
 
 `include "timescale.v"
 
-module vga_wb_master (CLK_I, RST_I, nRESET, CYC_O, STB_O, CAB_O, WE_O, ADR_O, SEL_O, ACK_I, ERR_I, DAT_I, SINT,
-	ctrl_ven, ctrl_cd, ctrl_pc, ctrl_vbl, ctrl_vbsw, ctrl_cbsw, VBAa, VBAb, CBA, Thgate, Tvgate,
-	stat_avmp, stat_acmp, bs_req, line_fifo_wreq, line_fifo_d, line_fifo_full);
+module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, sel_o, ack_i, err_i, dat_i, sint,
+	ctrl_ven, ctrl_cd, ctrl_pc, ctrl_vbl, ctrl_vbsw, ctrl_cbsw, VBAa, VBAb, Thgate, Tvgate,
+	stat_avmp, stat_acmp, vmem_switch, clut_switch, line_fifo_wreq, line_fifo_d, line_fifo_full,
+	clut_req, clut_ack, clut_adr, clut_q);
 
 	// inputs & outputs
 
 	// wishbone signals
-	input         CLK_I;    // master clock input
-	input         RST_I;    // synchronous active high reset
-	input         nRESET;   // asynchronous low reset
-	output        CYC_O;    // cycle output
-	reg CYC_O;
-	output        STB_O;    // strobe ouput
-	reg STB_O;
-	output        CAB_O;    // consecutive address burst output
-	reg CAB_O;
-	output        WE_O;     // write enable output
-	reg WE_O;
-	output [31:2] ADR_O;    // address output
-	output [ 3:0] SEL_O;    // byte select outputs (only 32bits accesses are supported)
-	reg [3:0] SEL_O;
-	input         ACK_I;    // wishbone cycle acknowledge 
-	input         ERR_I;    // wishbone cycle error
-	input [31:0]  DAT_I;    // wishbone data in
+	input         clk_i;    // master clock input
+	input         rst_i;    // synchronous active high reset
+	input         nrst_i;   // asynchronous low reset
+	output        cyc_o;    // cycle output
+	reg cyc_o;
+	output        stb_o;    // strobe ouput
+	reg stb_o;
+	output        cab_o;    // consecutive address burst output
+	reg cab_o;
+	output        we_o;     // write enable output
+	reg we_o;
+	output [31:0] adr_o;    // address output
+	output [ 3:0] sel_o;    // byte select outputs (only 32bits accesses are supported)
+	reg [3:0] sel_o;
+	input         ack_i;    // wishbone cycle acknowledge 
+	input         err_i;    // wishbone cycle error
+	input [31:0]  dat_i;    // wishbone data in
 
-	output        SINT;     // non recoverable error, interrupt host
+	output        sint;     // non recoverable error, interrupt host
 
 	// control register settings
 	input       ctrl_ven;   // video enable bit
@@ -46,101 +49,147 @@ module vga_wb_master (CLK_I, RST_I, nRESET, CYC_O, STB_O, CAB_O, WE_O, ADR_O, SE
 	// video memory addresses
 	input [31: 2] VBAa;     // video memory base address A
 	input [31: 2] VBAb;     // video memory base address B
-	input [31:11] CBA;      // CLUT base address
 
 	input [15:0] Thgate;    // horizontal visible area (in pixels)
 	input [15:0] Tvgate;    // vertical visible area (in horizontal lines)
 
 	output stat_avmp;       // active video memory page
 	output stat_acmp;       // active CLUT memory page
-	output bs_req;          // bank-switch request: memory page switched (when enabled). bs_req is always generated
+	reg stat_acmp;
+	output vmem_switch;     // video memory bank-switch request: memory page switched (when enabled)
+	output clut_switch;     // clut memory bank-switch request: clut page switched (when enabled)
 
 	// to/from line-fifo
 	output        line_fifo_wreq;
 	output [23:0] line_fifo_d;
 	input         line_fifo_full;
 
+	// to/from color lookup-table
+	output        clut_req;  // clut access request
+	input         clut_ack;  // clut access acknowledge
+	output [ 8:0] clut_adr;  // clut access address
+	input  [23:0] clut_q;    // clut access data in
+
 	//
 	// variable declarations
 	//
-	reg vmem_acc, clut_acc;                                  // video memory access // clut access
-	wire clut_req, clut_ack;      // clut access request // clut access acknowledge
-	wire [7:0] clut_offs;                                 // clut memory offset
+
+	reg vmem_acc;                 // video memory access
 	wire nvmem_req, vmem_ack;     // NOT video memory access request // video memory access acknowledge
-	wire ImDoneStrb;              // image done (strobe signal)
-	reg  dImDoneStrb;
-	wire pixelbuf_rreq, pixelbuf_empty, pixelbuf_hfull;
-	wire [31:0] pixelbuf_q;
-	wire RGBbuf_wreq, RGBbuf_empty, RGBbuf_full, RGB_fifo_full;
-//	reg  RGBbuf_rreq, fill_RGBfifo;
-	reg  fill_RGBfifo;
-	wire RGBbuf_rreq;
-	wire [23:0] RGBbuf_d;
+	reg  dvmem_ack;               // delayed video memory acknowledge
+
+//	wire  ImDone;                 // Done reading image from video mem 
+	reg  ImDone;                 // Done reading image from video mem 
+	reg  dImDone;                 // delayed ImDone
+	wire  ImDoneStrb;             // image done (strobe signal)
+	reg  dImDoneStrb;             // delayed ImDoneStrb
+
+	wire data_fifo_rreq, data_fifo_empty, data_fifo_hfull;
+	wire [31:0] data_fifo_q;
+	wire rgb_fifo_wreq, rgb_fifo_empty, rgb_fifo_full, rgb_ffull, rgb_fifo_rreq;
+	reg  fill_rgb_fifo;
+	wire [23:0] rgb_fifo_d;
+	wire ImDoneFifoQ;
+	reg  dImDoneFifoQ;
+	reg  [2:0] ImDoneCpQ;
+	reg        dImDoneCpQ;
+
+	reg sclr; // synchronous clear
+
+	wire [7:0] clut_offs; // color lookup table offset
 
 	//
 	// module body
 	//
 
+	// generate synchronous clear
+	always@(posedge clk_i)
+		sclr <= #1 ~ctrl_ven;
 	
 	//
 	// WISHBONE block
 	//
 	reg  [ 2:0] burst_cnt;                       // video memory burst access counter
-	wire        ImDone;                          // Done reading image from video mem 
-	reg         dImDone;                         // delayed ImDone
-	reg         hImDone;
 	wire        burst_done;                      // completed burst access to video mem
-	reg         sel_VBA, sel_CBA;                // select video memory base address // select clut base address
+	reg         sel_VBA;                         // select video memory base address
 	reg  [31:2] vmemA;                           // video memory address 
-	wire [31:2] clutA;                           // clut address
-	reg  [15:0] hgate_cnt, vgate_cnt;            // horizontal / vertical pixel counters
-	wire        hdone, vdone;                    // horizontal count done / vertical count done
 
 	// wishbone access controller, video memory access request has highest priority (try to keep fifo full)
-	always@(posedge CLK_I)
-		if (~ctrl_ven)
-			begin
-				vmem_acc <= #1 1'b0;
-				clut_acc <= #1 1'b0;
-			end
+	always@(posedge clk_i)
+		if (sclr)
+			vmem_acc <= #1 1'b0;
 		else
-			begin
-				clut_acc <= #1 clut_req & ( (nvmem_req & !vmem_acc) | clut_acc);
-				vmem_acc <= #1 (!nvmem_req | (vmem_acc & !(burst_done & vmem_ack) )) & !clut_acc;
-			end
+			vmem_acc <= #1 (!nvmem_req | (vmem_acc & !(burst_done & vmem_ack) ) ) & !ImDone;
 
-	assign vmem_ack = ACK_I & vmem_acc;
-	assign clut_ack = ACK_I & clut_acc;
-
-	assign SINT = (vmem_acc | clut_acc) & ERR_I; // Non recoverable error, interrupt host system
+	assign vmem_ack = ack_i;
+	assign sint = err_i; // Non recoverable error, interrupt host system
 
 	// select active memory page
-	always@(posedge CLK_I)
-		if (~ctrl_ven)
+	assign vmem_switch = ImDoneStrb;
+
+	always@(posedge clk_i)
+		if (sclr)
 			sel_VBA <= #1 1'b0;
 		else if (ctrl_vbsw)
-			sel_VBA <= #1 sel_VBA ^ ImDoneStrb;  // select next video memory bank when finished reading current bank (and bank switch enabled)
+			sel_VBA <= #1 sel_VBA ^ vmem_switch;  // select next video memory bank when finished reading current bank (and bank switch enabled)
 
 	assign stat_avmp = sel_VBA; // assign output
 
 	// select active clut page
-	always@(posedge CLK_I)
-		if (~ctrl_ven)
-			sel_CBA <= #1 1'b0;
+
+	// clut bank switch delay1; push ImDoneStrb into fifo. Account for data_fifo delay
+	always@(posedge clk_i)
+		dvmem_ack <= #1 vmem_ack;
+
+	vga_fifo #(4, 1) clut_sw_fifo (
+		.clk(clk_i),
+		.aclr(1'b1),
+		.sclr(sclr),
+		.d(ImDone),
+		.wreq(dvmem_ack),
+		.q(ImDoneFifoQ),
+		.rreq(data_fifo_rreq),
+		.empty(),
+		.hfull(),
+		.full()
+	);
+
+	// clut bank switch delay2: Account for ColorProcessor DataBuffer delay
+	always@(posedge clk_i)
+		if (data_fifo_rreq)
+			dImDoneFifoQ <= #1 ImDoneFifoQ;
+
+	// clut bank switch delay3; Account for ColorProcessor internal delay
+	always@(posedge clk_i)
+		if (sclr)
+			begin
+				ImDoneCpQ  <= #1 4'h0;
+				dImDoneCpQ <= #1 1'b0;
+			end
+		else
+			begin
+				dImDoneCpQ <= #1 ImDoneCpQ[2];
+				if (rgb_fifo_wreq)
+					ImDoneCpQ <= #1 { ImDoneCpQ[2:0], dImDoneFifoQ };
+			end
+
+	assign clut_switch = ImDoneCpQ[2] & !dImDoneCpQ;
+
+	always@(posedge clk_i)
+		if (sclr)
+			stat_acmp <= #1 1'b0;
 		else if (ctrl_cbsw)
-			sel_CBA <= #1 sel_CBA ^ ImDoneStrb;  // select next clut when finished reading current video bank
+			stat_acmp <= #1 stat_acmp ^ clut_switch;  // select next clut when finished reading clut for current video bank (and bank switch enabled)
 
-	assign stat_acmp = sel_CBA; // assign output
-
-	// assign bank_switch_request (status register) output
-	assign bs_req = ImDoneStrb & ctrl_ven; // bank switch request
+	// generate clut-address
+	assign clut_adr = {stat_acmp, clut_offs};
 
 	// generate burst counter
 	wire [3:0] burst_cnt_val;
 	assign burst_cnt_val = {1'b0, burst_cnt} -4'h1;
 	assign burst_done = burst_cnt_val[3];
 
-	always@(posedge CLK_I)
+	always@(posedge clk_i)
 		if ( (burst_done & vmem_ack) | !vmem_acc)
 			case (ctrl_vbl) // synopsis full_case parallel_case
 				2'b00: burst_cnt <= #1 3'b000; // burst length 1
@@ -156,59 +205,98 @@ module vga_wb_master (CLK_I, RST_I, nRESET, CYC_O, STB_O, CAB_O, WE_O, ADR_O, SE
 	//
 
 	// hgate counter
-	wire [16:0] hgate_cnt_val;
-	assign hgate_cnt_val = {1'b0, hgate_cnt} -17'h1;
-	assign hdone = hgate_cnt_val[16];
+	reg  [15:0] hgate_cnt;
+	reg  [16:0] hgate_cnt_val;
+	reg  [1:0]  hgate_div_cnt;
+	reg  [2:0]  hgate_div_val;
 
-	always@(posedge CLK_I)
-		if (~ctrl_ven)
-			hgate_cnt <= #1 Thgate;
-		else if (RGBbuf_wreq)
-			if (hdone)
-				hgate_cnt <= #1 Thgate;
+	wire hdone = hgate_cnt_val[16] & vmem_ack; // ????
+
+	always@(hgate_cnt or hgate_div_cnt or ctrl_cd)
+		begin
+			hgate_div_val = {1'b0, hgate_div_cnt} - 3'h1;
+			
+			if (ctrl_cd != 2'b10)
+				hgate_cnt_val = {1'b0, hgate_cnt} - 17'h1;
+			else if ( hgate_div_val[2] )
+				hgate_cnt_val = {1'b0, hgate_cnt} - 17'h1;
 			else
-				hgate_cnt <= #1 hgate_cnt_val[15:0];
+				hgate_cnt_val = {1'b0, hgate_cnt};
+		end
+
+	always@(posedge clk_i)
+		if (sclr)
+				begin
+					case(ctrl_cd) // synopsys full_case parallel_case
+						2'b00: // 8bpp
+							hgate_cnt <= #1 Thgate >> 2; // 4 pixels per cycle
+						2'b01: //16bpp
+							hgate_cnt <= #1 Thgate >> 1; // 2 pixels per cycle
+						2'b10: //24bpp
+							hgate_cnt <= #1 Thgate >> 2; // 4/3 pixels per cycle
+						2'b11: //reserved
+							;
+					endcase
+
+					hgate_div_cnt <= 2'b10;
+				end
+		else if (vmem_ack)
+			if (hdone)
+				begin
+					case(ctrl_cd) // synopsys full_case parallel_case
+						2'b00: // 8bpp
+							hgate_cnt <= #1 Thgate >> 2; // 4 pixels per cycle
+						2'b01: //16bpp
+							hgate_cnt <= #1 Thgate >> 1; // 2 pixels per cycle
+						2'b10: //24bpp
+							hgate_cnt <= #1 Thgate >> 2; // 4/3 pixels per cycle
+						2'b11: //reserved
+							;
+					endcase
+					hgate_div_cnt <= #1 2'b10;
+				end
+			else //if (vmem_ack)
+				begin
+					hgate_cnt <= #1 hgate_cnt_val[15:0];
+
+					if ( hgate_div_val[2] )
+						hgate_div_cnt <= #1 2'b10;
+					else
+						hgate_div_cnt <= #1 hgate_div_val[1:0];
+				end
 
 	// vgate counter
-	wire [16:0] vgate_cnt_val;
-	assign vgate_cnt_val = {1'b0, vgate_cnt} -17'h1;
-	assign vdone = vgate_cnt_val[16];
+	reg  [15:0] vgate_cnt;
+	wire [16:0] vgate_cnt_val = {1'b0, vgate_cnt} -17'h1;
+	wire vdone = vgate_cnt_val[16];
 
-	always@(posedge CLK_I)
-		if (~ctrl_ven)
+	always@(posedge clk_i)
+		if (sclr)
 			vgate_cnt <= #1 Tvgate;
-		else if (hdone & RGBbuf_wreq)
-			if (ImDone)
-				vgate_cnt <= #1 Tvgate;
-			else
-				vgate_cnt <= #1 vgate_cnt_val[15:0];
+		else if (ImDoneStrb)
+			vgate_cnt <= #1 Tvgate;
+		else if (hdone)
+			vgate_cnt <= #1 vgate_cnt_val[15:0];
 
-	assign ImDone = hdone & vdone;
+	always@(posedge clk_i)
+		ImDone <= #1 hdone & vdone;
+
+//	assign ImDone = hdone & vdone;
 	assign ImDoneStrb = ImDone & !dImDone;
 
-	always@(posedge CLK_I)
-	begin
-		if (~ctrl_ven)
-			dImDone <= #1 1'b0;
-		else
+	always@(posedge clk_i)
+		begin
 			dImDone <= #1 ImDone;
-
-		dImDoneStrb <= #1 ImDoneStrb;
-	end
-
-	always@(posedge CLK_I)
-		if (!ctrl_ven)
-			hImDone <= #1 1'b0;
-		else
-			hImDone <= #1 (ImDone || hImDone) && vmem_acc && !(burst_done && vmem_ack);
+			dImDoneStrb <= #1 ImDoneStrb;
+		end
 
 	//
 	// generate addresses
 	//
 
 	// select video memory base address
-	always@(posedge CLK_I)
-		if (dImDoneStrb | !ctrl_ven)
+	always@(posedge clk_i)
+		if (dImDoneStrb | sclr)
 			if (!sel_VBA)
 				vmemA <= #1 VBAa;
 			else
@@ -216,117 +304,98 @@ module vga_wb_master (CLK_I, RST_I, nRESET, CYC_O, STB_O, CAB_O, WE_O, ADR_O, SE
 		else if (vmem_ack)
 			vmemA <= #1 vmemA +30'h1;
 
-	// calculate CLUT address
-	assign clutA = {CBA, sel_CBA, clut_offs};
-
 	// generate wishbone signals
-	assign ADR_O = vmem_acc ? vmemA : clutA;
+	assign adr_o = {vmemA, 2'b00};
+	wire wb_cycle = vmem_acc & !(burst_done & vmem_ack & nvmem_req) & !ImDone;
 
-	always@(posedge CLK_I or negedge nRESET)
-		if (!nRESET)
+	always@(posedge clk_i or negedge nrst_i)
+		if (!nrst_i)
 			begin
-				CYC_O <= #1 1'b0;
-				STB_O <= #1 1'b0;
-				SEL_O <= #1 4'b1111;
-				CAB_O <= #1 1'b0;
-				WE_O  <= #1 1'b0;
+				cyc_o <= #1 1'b0;
+				stb_o <= #1 1'b0;
+				sel_o <= #1 4'b1111;
+				cab_o <= #1 1'b0;
+				we_o  <= #1 1'b0;
 			end
 		else
-			if (RST_I)
+			if (rst_i)
 				begin
-					CYC_O <= #1 1'b0;
-					STB_O <= #1 1'b0;
-					SEL_O <= #1 4'b1111;
-					CAB_O <= #1 1'b0;
-					WE_O  <= #1 1'b0;
+					cyc_o <= #1 1'b0;
+					stb_o <= #1 1'b0;
+					sel_o <= #1 4'b1111;
+					cab_o <= #1 1'b0;
+					we_o  <= #1 1'b0;
 				end
 			else
 				begin
-					CYC_O <= #1 (clut_acc & clut_req & !ACK_I) | (vmem_acc & !(burst_done & vmem_ack & nvmem_req) );
-					STB_O <= #1 (clut_acc & clut_req & !ACK_I) | (vmem_acc & !(burst_done & vmem_ack & nvmem_req) );
-					SEL_O <= #1 4'b1111; // only 32bit accesses are supported
-					CAB_O <= #1 vmem_acc & !(burst_done & vmem_ack & nvmem_req);
-					WE_O  <= #1 1'b0; // read only
+					cyc_o <= #1 wb_cycle;
+					stb_o <= #1 wb_cycle;
+					sel_o <= #1 4'b1111;   // only 32bit accesses are supported
+					cab_o <= #1 wb_cycle;
+					we_o  <= #1 1'b0;      // read only
 				end
 
 	// pixel buffer (temporary store data read from video memory)
-	vga_fifo #(4, 32) pixel_buf (
-		.clk(CLK_I),
+	vga_fifo #(4, 32) data_fifo (
+		.clk(clk_i),
 		.aclr(1'b1),
-		.sclr(!ctrl_ven || hImDone || ImDoneStrb),
-		.d(DAT_I),
+		.sclr(sclr),
+		.d(dat_i),
 		.wreq(vmem_ack),
-		.q(pixelbuf_q),
-		.rreq(pixelbuf_rreq),
-		.empty(pixelbuf_empty),
-		.hfull(pixelbuf_hfull),
+		.q(data_fifo_q),
+		.rreq(data_fifo_rreq),
+		.empty(data_fifo_empty),
+		.hfull(data_fifo_hfull),
 		.full()
 	);
 
-	assign nvmem_req = !(!pixelbuf_hfull && !(ImDoneStrb || hImDone) );
+	assign nvmem_req = data_fifo_hfull;
 
-	always@(posedge CLK_I)
-		if (!ctrl_ven)
-			fill_RGBfifo <= #1 1'b0;
+	always@(posedge clk_i)
+		if (sclr)
+			fill_rgb_fifo <= #1 1'b0;
 		else
-			fill_RGBfifo <= #1 (RGBbuf_empty | fill_RGBfifo) & !RGBbuf_full;
+			fill_rgb_fifo <= #1 (rgb_fifo_empty | fill_rgb_fifo) & !rgb_fifo_full;
 
-	assign RGB_fifo_full = !(fill_RGBfifo & !RGBbuf_full);
+	assign rgb_ffull = !(fill_rgb_fifo & !rgb_fifo_full);
 
 	// hookup color processor
 	vga_colproc color_proc (
-		.clk(CLK_I),
-		.srst(!ctrl_ven || (ImDoneStrb && !clut_acc) ),
-		.pixel_buffer_di(pixelbuf_q),
-		.wb_di(DAT_I),
+		.clk(clk_i),
+		.srst(sclr),
+		.pixel_buffer_di(data_fifo_q),
 		.ColorDepth(ctrl_cd),
 		.PseudoColor(ctrl_pc),
-		.pixel_buffer_empty(pixelbuf_empty),
-		.pixel_buffer_rreq(pixelbuf_rreq),
-		.RGB_fifo_full(RGB_fifo_full),
-		.RGB_fifo_wreq(RGBbuf_wreq),
-		.R(RGBbuf_d[23:16]),
-		.G(RGBbuf_d[15:8]),
-		.B(RGBbuf_d[7:0]),
+		.pixel_buffer_empty(data_fifo_empty),
+		.pixel_buffer_rreq(data_fifo_rreq),
+		.RGB_fifo_full(rgb_ffull),
+		.RGB_fifo_wreq(rgb_fifo_wreq),
+		.R(rgb_fifo_d[23:16]),
+		.G(rgb_fifo_d[15:8]),
+		.B(rgb_fifo_d[7:0]),
 		.clut_req(clut_req),
+		.clut_ack(clut_ack),
 		.clut_offs(clut_offs),
-		.clut_ack(clut_ack)
+		.clut_q(clut_q)
 	);
 
 	// hookup RGB buffer (temporary station between WISHBONE-clock-domain and pixel-clock-domain)
-	vga_fifo #(3, 24) RGB_buf (
-		.clk(CLK_I),
+	vga_fifo #(3, 24) rgb_fifo (
+		.clk(clk_i),
 		.aclr(1'b1),
-		.sclr(!ctrl_ven),
-		.d(RGBbuf_d),
-		.wreq(RGBbuf_wreq),
+		.sclr(sclr),
+		.d(rgb_fifo_d),
+		.wreq(rgb_fifo_wreq),
 		.q(line_fifo_d),
-		.rreq(RGBbuf_rreq),
-		.empty(RGBbuf_empty),
-		.hfull(RGBbuf_full),
+		.rreq(rgb_fifo_rreq),
+		.empty(rgb_fifo_empty),
+		.hfull(rgb_fifo_full),
 		.full()
 	);
 
-	// generate signals for line-fifo
-	/*
-	always@(posedge CLK_I)
-		if (!ctrl_ven)
-			RGBbuf_rreq <= #1 1'b0;
-		else
-			RGBbuf_rreq <= #1 !line_fifo_full & !RGBbuf_empty & !RGBbuf_rreq;
-	*/
-
-	assign RGBbuf_rreq = !line_fifo_full && !RGBbuf_empty;
-	assign line_fifo_wreq = RGBbuf_rreq;
+	assign rgb_fifo_rreq = !line_fifo_full && !rgb_fifo_empty;
+	assign line_fifo_wreq = rgb_fifo_rreq;
 
 endmodule
-
-
-
-
-
-
-
-
 
 

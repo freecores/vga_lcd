@@ -2,25 +2,28 @@
 // File colproc.vhd, Color Processor
 // Project: VGA
 // Author : Richard Herveille. Ideas and thoughts: Sherif Taher Eid
-// rev. 1.0 August  2nd, 2001. Initial Verilog release
-// rev. 1.1 August 29th, 2001. Changed statemachine to increase bandwidth.
 //
+// rev. 1.0 August   2nd, 2001. Initial Verilog release
+// rev. 1.1 August  29th, 2001. Changed statemachine to increase bandwidth.
+// rev. 2.0 October  2nd, 2001. Revised core. Included color lookup table in Color Processor
 
 `include "timescale.v"
 
-module vga_colproc(clk, srst, pixel_buffer_di, wb_di, ColorDepth, PseudoColor, 
+module vga_colproc(clk, srst, pixel_buffer_di, ColorDepth, PseudoColor, 
 						pixel_buffer_empty, pixel_buffer_rreq, RGB_fifo_full,
-						RGB_fifo_wreq, R, G, B, clut_req, clut_offs, clut_ack);
+						RGB_fifo_wreq, R, G, B, 
+						clut_req, clut_ack, clut_offs, clut_q);
 
+	//
 	// inputs & outputs
+	//
 	input clk;                    // master clock
 	input srst;                   // synchronous reset
 
 	input [31:0] pixel_buffer_di; // Pixel Buffer data input
-	input [31:0] wb_di;           // wishbone data input
 
 	input [1:0] ColorDepth;       // color depth (8bpp, 16bpp, 24bpp)
-	input PseudoColor;            // pseudo color enabled (only for 8bpp color depth)
+	input       PseudoColor;      // pseudo color enabled (only for 8bpp color depth)
 
 	input  pixel_buffer_empty;
 	output pixel_buffer_rreq;     // pixel buffer read request
@@ -32,19 +35,21 @@ module vga_colproc(clk, srst, pixel_buffer_di, wb_di, ColorDepth, PseudoColor,
 	output [7:0] R, G, B;         // pixel color information
 	reg    [7:0] R, G, B;
 
-	output clut_req;              // Color lookup table access request
-	reg    clut_req;
-	output [7:0] clut_offs;       // offset into color lookup table
-	reg    [7:0] clut_offs;
-	input  clut_ack;              // Color lookup table data acknowledge
-	
+	output        clut_req;  // clut request
+	reg clut_req;
+	input         clut_ack;  // clut acknowledge
+	output [ 7:0] clut_offs; // clut offset
+	reg [7:0] clut_offs;
+	input  [23:0] clut_q;    // clut data in
+
+	//
 	// variable declarations
+	//
 	reg [31:0] DataBuffer;
 
 	reg [7:0] Ra, Ga, Ba;
 	reg [1:0] colcnt;
 	reg RGBbuf_wreq;
-
 
 	//
 	// Module body
@@ -154,18 +159,18 @@ module vga_colproc(clk, srst, pixel_buffer_di, wb_di, ColorDepth, PseudoColor,
 				c_state <= #1 nxt_state;
 
 
-	reg clut_acc;
+	reg iclut_req;
 	reg pixelbuf_rreq;
 	reg [7:0] iR, iG, iB, iRa, iGa, iBa;
 
 	// output decoder
-	always@(c_state or pixel_buffer_empty or colcnt or DataBuffer or RGB_fifo_full or clut_ack or wb_di or Ba or Ga or Ra)
+	always@(c_state or pixel_buffer_empty or colcnt or DataBuffer or RGB_fifo_full or clut_ack or clut_q or Ba or Ga or Ra)
 	begin : output_decoder
 
 		// initial values
 		pixelbuf_rreq = 1'b0;
 		RGBbuf_wreq = 1'b0;
-		clut_acc = 1'b0;
+		iclut_req = 1'b0;
 				
 		iR  = 'h0;
 		iG  = 'h0;
@@ -233,14 +238,14 @@ module vga_colproc(clk, srst, pixel_buffer_di, wb_di, ColorDepth, PseudoColor,
 							pixelbuf_rreq = 1'b1;
 					end
 
-				iR = wb_di[23:16];
-				iG = wb_di[15: 8];
-				iB = wb_di[ 7: 0];
+				iR = clut_q[23:16];
+				iG = clut_q[15: 8];
+				iB = clut_q[ 7: 0];
 
-				clut_acc = ~RGB_fifo_full;
+				iclut_req = ~RGB_fifo_full;
 
 				if ( !(|colcnt) && clut_ack)
-					clut_acc =1'b0;
+					iclut_req =1'b0;
 			end
 
 			//
@@ -349,7 +354,7 @@ module vga_colproc(clk, srst, pixel_buffer_di, wb_di, ColorDepth, PseudoColor,
 				begin
 					pixel_buffer_rreq <= #1 pixelbuf_rreq;
 					RGB_fifo_wreq <= #1 RGBbuf_wreq;
-					clut_req <= #1 clut_acc;
+					clut_req <= #1 iclut_req;
 				end
 	end
 
@@ -371,18 +376,4 @@ module vga_colproc(clk, srst, pixel_buffer_di, wb_di, ColorDepth, PseudoColor,
 			colcnt <= #1 2'b11;
 		else if (RGBbuf_wreq)
 			colcnt <= #1 colcnt -2'h1;
-
 endmodule
-
-
-
-
-
-
-
-
-
-
-
-
-
