@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: tests.v,v 1.8 2003-05-07 14:39:19 rherveille Exp $
+//  $Id: tests.v,v 1.9 2003-08-22 07:17:21 rherveille Exp $
 //
-//  $Date: 2003-05-07 14:39:19 $
-//  $Revision: 1.8 $
+//  $Date: 2003-08-22 07:17:21 $
+//  $Revision: 1.9 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.8  2003/05/07 14:39:19  rherveille
+//               Added DVI tests
+//
 //               Revision 1.7  2003/05/07 09:45:28  rherveille
 //               Numerous updates and added checks
 //
@@ -60,7 +63,7 @@
 //
 //
 //
-//                        
+//
 
 
 task show_errors;
@@ -111,7 +114,7 @@ for(n=0;n<6;n=n+1)
 		endcase
 
 		m0.wb_wr1( `CTRL, 4'hf, pattern );
-		check( `CTRL,  pattern, 32'h0000_ffff, "CTRL ");
+		check( `CTRL,  pattern, 32'hffff_ff9f, "CTRL ");
 
 		m0.wb_wr1( `HTIM, 4'hf, pattern );
 		check( `HTIM,  pattern, 32'hffff_ffff, "HTIM ");
@@ -666,6 +669,7 @@ for(mode=0;mode<4;mode=mode+1)
 				pd, red, green, blue);
 			$display("       pixel=%0d, line=%0d, (%0t)",p,l,$time);
 			error_cnt = error_cnt + 1;
+			if(error_cnt > 10)	$stop;
 		   end
 
 		@(posedge pclk);
@@ -778,8 +782,8 @@ repeat(10)	@(posedge clk);
 
 
 vbl   = 3;
-mode  = 1;
-delay = 1;
+mode  = 3;
+delay = 2;
 
 for(delay=0;delay<6;delay=delay+1)
    begin
