@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: vga_curproc.v,v 1.2 2002-03-04 11:01:59 rherveille Exp $
+//  $Id: vga_curproc.v,v 1.3 2002-03-04 16:05:52 rherveille Exp $
 //
-//  $Date: 2002-03-04 11:01:59 $
-//  $Revision: 1.2 $
+//  $Date: 2002-03-04 16:05:52 $
+//  $Revision: 1.3 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.2  2002/03/04 11:01:59  rherveille
+//               Added 64x64pixels 4bpp hardware cursor support.
+//
 //               Revision 1.1  2002/02/16 10:40:00  rherveille
 //               Some minor bug-fixes.
 //               Changed vga_ssel into vga_curproc (cursor processor).
@@ -106,10 +109,9 @@ module vga_curproc (clk, rst_i, Thgate, Tvgate, idat, idat_wreq,
 	reg  [15:0] xcnt, ycnt;
 	wire        xdone, ydone;
 	wire [15:0] cursor_x, cursor_y;
-	reg         alpha, dalpha;
-	wire        cursor_alpha;
-	reg  [ 4:0] r, g, b, dr, dg, db;
-	wire [ 7:0] cursor_r, cursor_g, cursor_b;
+	wire        cursor_isalpha;
+	reg  [15:0] cdat, dcdat;
+	wire [ 7:0] cursor_r, cursor_g, cursor_b, cursor_alpha;
 	reg         inbox_x, inbox_y;
 	wire        inbox;
 	reg         dinbox, ddinbox, dddinbox;
@@ -200,20 +202,10 @@ module vga_curproc (clk, rst_i, Thgate, Tvgate, idat, idat_wreq,
 	// decode cursor data for 32x32x16bpp mode
 	always@(posedge clk)
 		if (didat_wreq)
-			begin
-				alpha <= #1 dcbuf_ra[0] ? cbuf_q[31]    : cbuf_q[15];
-				r     <= #1 dcbuf_ra[0] ? cbuf_q[30:26] : cbuf_q[14:10];
-				g     <= #1 dcbuf_ra[0] ? cbuf_q[25:21] : cbuf_q[ 9: 5];
-				b     <= #1 dcbuf_ra[0] ? cbuf_q[20:16] : cbuf_q[ 4: 0];
-			end
+			cdat <= #1 dcbuf_ra[0] ? cbuf_q[31:16] : cbuf_q[15:0];
 
 	always@(posedge clk)
-		begin
-			dalpha <= #1 alpha;
-			dr     <= #1 r;
-			dg     <= #1 g;
-			db     <= #1 b;
-		end
+		dcdat <= #1 cdat;
 
 	//
 	// decode cursor data for 64x64x4bpp mode
@@ -234,11 +226,11 @@ module vga_curproc (clk, rst_i, Thgate, Tvgate, idat, idat_wreq,
 
 	//
 	// generate cursor colors
-	assign cursor_alpha =  cursor_res ? cc_dat_i[15]    : dalpha;
-	assign cursor_r     = {cursor_res ? cc_dat_i[14:10] : dr, 3'h0};
-	assign cursor_g     = {cursor_res ? cc_dat_i[ 9: 5] : dg, 3'h0};
-	assign cursor_b     = {cursor_res ? cc_dat_i[ 4: 0] : db, 3'h0};
-
+	assign cursor_isalpha =  cursor_res ? cc_dat_i[15]    : dcdat[15];
+	assign cursor_alpha   =  cursor_res ? cc_dat_i[7:0]   : dcdat[7:0];
+	assign cursor_r       = {cursor_res ? cc_dat_i[14:10] : dcdat[14:10], 3'h0};
+	assign cursor_g       = {cursor_res ? cc_dat_i[ 9: 5] : dcdat[ 9: 5], 3'h0};
+	assign cursor_b       = {cursor_res ? cc_dat_i[ 4: 0] : dcdat[ 4: 0], 3'h0};
 
 	//
 	// delay image data
@@ -270,12 +262,22 @@ module vga_curproc (clk, rst_i, Thgate, Tvgate, idat, idat_wreq,
 	always@(posedge clk)
 		dddcursor_en <= #1 ddcursor_en;
 
+	// Alpha blending:
+	// rgb = (rgb1 * alhpa1) + (rgb2 * alpha2)
+	// We generate an alpha mixer (alpha1 + alpha2 = 1)
+	// rgb = (alpha1)(rgb1) + (1-alpha1)(rgb2)
+	// We always mix to black (rgb2 = 0)
+	// rgb = (alpha1)(rgb1)
 	always@(posedge clk)
 		if (ddidat_wreq)
 			if (!dddcursor_en || !dddinbox)
 				rgb <= #1 dddidat;
-			else if (cursor_alpha)
-				rgb <= #1 dddidat;
+			else if (cursor_isalpha)
+				`ifdef VGA_HWC_3D
+					rgb <= #1 dddidat * cursor_alpha;
+				`else
+					rgb <= #1 dddidat;
+				`endif
 			else
 				rgb <= #1 {cursor_r, cursor_g, cursor_b};
 

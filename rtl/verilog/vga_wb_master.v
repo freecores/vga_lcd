@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: vga_wb_master.v,v 1.8 2002-03-04 11:01:59 rherveille Exp $
+//  $Id: vga_wb_master.v,v 1.9 2002-03-04 16:05:52 rherveille Exp $
 //
-//  $Date: 2002-03-04 11:01:59 $
-//  $Revision: 1.8 $
+//  $Date: 2002-03-04 16:05:52 $
+//  $Revision: 1.9 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.8  2002/03/04 11:01:59  rherveille
+//               Added 64x64pixels 4bpp hardware cursor support.
+//
 //               Revision 1.7  2002/02/16 10:40:00  rherveille
 //               Some minor bug-fixes.
 //               Changed vga_ssel into vga_curproc (cursor processor).
@@ -163,8 +166,17 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 
 	wire [7:0] clut_offs; // color lookup table offset
 
-	reg [8:0] cursor_adr;
-	reg       cursor0_we, cursor1_we;
+	//
+	// hardware cursors
+	reg [31:11] cursor_ba;              // cursor pattern base address
+	reg [ 8: 0] cursor_adr;             // cursor pattern offset
+	wire        cursor0_we, cursor1_we; // cursor buffers write_request
+	reg         ld_cursor0, ld_cursor1; // reload cursor0, cursor1
+	reg         cur_acc;                // cursor processors request memory access
+	reg         cur_acc_sel;            // which cursor to reload
+	wire        cur_ack;                // cursor processor memory access acknowledge
+	wire        cur_done;               // done reading cursor pattern
+
 
 	//
 	// module body
@@ -185,12 +197,21 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 	// wishbone access controller, video memory access request has highest priority (try to keep fifo full)
 	always@(posedge clk_i)
 		if (sclr)
-			vmem_acc <= #1 1'b0;
+			vmem_acc <= #1 1'b0; // video memory access request
 		else
-			vmem_acc <= #1 (!nvmem_req | (vmem_acc & !(burst_done & vmem_ack) ) ) & !ImDone;
+			vmem_acc <= #1 (!nvmem_req | (vmem_acc & !(burst_done & vmem_ack) ) ) & !ImDone & !cur_acc;
 
-	assign vmem_ack = ack_i;
+	always@(posedge clk_i)
+		if (sclr)
+			cur_acc <= #1 1'b0; // cursor processor memory access request
+		else
+			cur_acc <= #1 (cur_acc | ImDone & (ld_cursor0 | ld_cursor1)) & !cur_done;
+
+
+	assign vmem_ack = ack_i & vmem_acc;
+	assign cur_ack  = ack_i & cur_acc;
 	assign sint = err_i; // Non recoverable error, interrupt host system
+
 
 	// select active memory page
 	assign vmem_switch = ImDoneStrb;
@@ -218,6 +239,7 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 		.full()
 	);
 
+	//
 	// clut bank switch / cursor data delay2: Account for ColorProcessor DataBuffer delay
 	always@(posedge clk_i)
 		if (sclr)
@@ -239,9 +261,11 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 		else if (ctrl_cbsw)
 			stat_acmp <= #1 stat_acmp ^ clut_switch;  // select next clut when finished reading clut for current video bank (and bank switch enabled)
 
+	//
 	// generate clut-address
 	assign clut_adr = {stat_acmp, clut_offs};
 
+	//
 	// generate burst counter
 	wire [3:0] burst_cnt_val;
 	assign burst_cnt_val = {1'b0, burst_cnt} -4'h1;
@@ -360,9 +384,52 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 		else if (vmem_ack)
 			vmemA <= #1 vmemA +30'h1;
 
+
+	////////////////////////////////////
+	// hardware cursor signals section
+	//
+	always@(posedge clk_i)
+		if (ImDone)
+			cur_acc_sel <= #1 ld_cursor0; // cursor0 has highest priority
+
+	always@(posedge clk_i)
+	if (sclr)
+		begin
+			ld_cursor0 <= #1 1'b0;
+			ld_cursor1 <= #1 1'b0;
+		end
+	else
+		begin
+			ld_cursor0 <= #1 cursor0_ld | (ld_cursor0 & !(cur_done &  cur_acc_sel));
+			ld_cursor1 <= #1 cursor1_ld | (ld_cursor1 & !(cur_done & !cur_acc_sel));
+		end
+
+	// select cursor base address
+	always@(posedge clk_i)
+		if (!cur_acc)
+			cursor_ba <= #1 ld_cursor0 ? cursor0_ba : cursor1_ba;
+
+	// generate pattern offset
+	wire [9:0] next_cursor_adr = {1'b0, cursor_adr} + 10'h1;
+	assign     cur_done = next_cursor_adr[9];
+
+	always@(posedge clk_i)
+		if (!cur_acc)
+			cursor_adr <= #1 9'h0;
+		else if (cur_ack)
+			cursor_adr <= #1 next_cursor_adr;
+
+	// generate cursor buffers write enable signals
+	assign cursor1_we = cur_ack & !cur_acc_sel;
+	assign cursor0_we = cur_ack &  cur_acc_sel;
+
+
+	//////////////////////////////
 	// generate wishbone signals
-	assign adr_o = {vmemA, 2'b00};
-	wire wb_cycle = vmem_acc & !(burst_done & vmem_ack & nvmem_req) & !ImDone;
+	//
+	assign adr_o = cur_acc ? {cursor_ba, cursor_adr, 2'b00} : {vmemA, 2'b00};
+	wire wb_cycle = vmem_acc & !(burst_done & vmem_ack & nvmem_req) & !ImDone ||
+	                cur_acc & !cur_done;
 
 	always@(posedge clk_i or negedge nrst_i)
 		if (!nrst_i)
@@ -391,6 +458,7 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 					we_o  <= #1 1'b0;      // read only
 				end
 
+	//
 	// video-data buffer (temporary store data read from video memory)
 	vga_fifo #(4, 32) data_fifo (
 		.clk(clk_i),
@@ -407,7 +475,7 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 
 	assign nvmem_req = data_fifo_hfull;
 
-
+	//
 	// hookup color processor
 	vga_colproc color_proc (
 		.clk(clk_i),
@@ -428,31 +496,28 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 		.clut_q(clut_q)
 	);
 
+	//
 	// hookup data-source-selector && hardware cursor module
 `ifdef VGA_HWC1	// generate Hardware Cursor1 (if enabled)
-	reg scursor1_ld;
+	wire cursor1_ld_strb;
 	reg scursor1_en;
 	reg scursor1_res;
 	reg [31:0] scursor1_xy;
 
-	always@(posedge clk_i)
-		if (sclr)
-			scursor1_ld <= #1 1'b0;
-		else
-			scursor1_ld <= #1 cursor1_ld | (scursor1_ld & !(ddImDoneFifoQ & !dImDoneFifoQ));
+	assign cursor1_ld_strb = ddImDoneFifoQ & !dImDoneFifoQ;
 
 	always@(posedge clk_i)
 		if (sclr)
 			scursor1_en <= #1 1'b0;
-		else if (scursor1_ld)
+		else if (cursor1_ld_strb)
 			scursor1_en <= #1 cursor1_en;
 
 	always@(posedge clk_i)
-		if (scursor1_ld)
+		if (cursor1_ld_strb)
 			scursor1_xy <= #1 cursor1_xy;
 
 	always@(posedge clk_i)
-		if (scursor1_ld)
+		if (cursor1_ld_strb)
 			scursor1_res <= #1 cursor1_res;
 
 	vga_curproc hw_cursor1 (
@@ -486,7 +551,6 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 `endif
 
 `else			// Hardware Cursor1 disabled, generate pass-through signals
-
 	assign ssel1_wreq = color_proc_wreq;
 	assign ssel1_q    = color_proc_q;
 
@@ -503,29 +567,25 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 
 
 `ifdef VGA_HWC0	// generate Hardware Cursor0 (if enabled)
-	reg scursor0_ld;
+	wire cursor0_ld_strb;
 	reg scursor0_en;
 	reg scursor0_res;
 	reg [31:0] scursor0_xy;
 
-	always@(posedge clk_i)
-		if (sclr)
-			scursor0_ld <= #1 1'b0;
-		else
-			scursor0_ld <= #1 cursor0_ld | (scursor0_ld & !(sddImDoneFifoQ & !sdImDoneFifoQ));
+	assign cursor0_ld_strb = sddImDoneFifoQ & !sdImDoneFifoQ;
 
 	always@(posedge clk_i)
 		if (sclr)
 			scursor0_en <= #1 1'b0;
-		else if (scursor0_ld)
+		else if (cursor0_ld_strb)
 			scursor0_en <= #1 cursor0_en;
 
 	always@(posedge clk_i)
-		if (scursor0_ld)
+		if (cursor0_ld_strb)
 			scursor0_xy <= #1 cursor0_xy;
 
 	always@(posedge clk_i)
-		if (scursor0_ld)
+		if (cursor0_ld_strb)
 			scursor0_res <= #1 cursor0_res;
 
 	vga_curproc hw_cursor0 (
@@ -553,6 +613,7 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 	assign cc0_adr_o  = 4'h0;
 `endif
 
+	//
 	// hookup RGB buffer (temporary station between WISHBONE-clock-domain 
 	// and pixel-clock-domain)
 	// The cursor_processor pipelines introduce a delay between the color
@@ -575,5 +636,4 @@ module vga_wb_master (clk_i, rst_i, nrst_i, cyc_o, stb_o, cab_o, we_o, adr_o, se
 	assign line_fifo_wreq = rgb_fifo_rreq;
 
 endmodule
-
 

@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: vga_cur_cregs.v,v 1.1 2002-03-04 11:01:59 rherveille Exp $
+//  $Id: vga_cur_cregs.v,v 1.2 2002-03-04 16:05:52 rherveille Exp $
 //
-//  $Date: 2002-03-04 11:01:59 $
-//  $Revision: 1.1 $
+//  $Date: 2002-03-04 16:05:52 $
+//  $Revision: 1.2 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.1  2002/03/04 11:01:59  rherveille
+//               Added 64x64pixels 4bpp hardware cursor support.
+//
 //
 
 `include "timescale.v"
@@ -87,7 +90,7 @@ module vga_cur_cregs (
 	//
 	// variable declarations
 	//
-	reg  [31:0] cregs [2:0];  // color registers
+	reg  [31:0] cregs [7:0];  // color registers
 	wire [31:0] temp_cdat;
 
 	//
@@ -99,9 +102,7 @@ module vga_cur_cregs (
 	// generate host interface
 
 	// write section
-	always@(posedge clk_i or negedge arst_i)
-		if (~arst_i)
-			
+	always@(posedge clk_i)
 		if (hsel_i & hwe_i)
 			cregs[hadr_i] <= #1 hdat_i;
 

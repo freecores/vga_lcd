@@ -37,16 +37,19 @@
 
 //  CVS Log
 //
-//  $Id: vga_wb_slave.v,v 1.8 2002-03-04 11:01:59 rherveille Exp $
+//  $Id: vga_wb_slave.v,v 1.9 2002-03-04 16:05:52 rherveille Exp $
 //
-//  $Date: 2002-03-04 11:01:59 $
-//  $Revision: 1.8 $
+//  $Date: 2002-03-04 16:05:52 $
+//  $Revision: 1.9 $
 //  $Author: rherveille $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //               $Log: not supported by cvs2svn $
+//               Revision 1.8  2002/03/04 11:01:59  rherveille
+//               Added 64x64pixels 4bpp hardware cursor support.
+//
 //               Revision 1.7  2002/02/25 06:13:44  rherveille
 //               Fixed dat_o incomplete sensitivity list.
 //
@@ -400,7 +403,7 @@ module vga_wb_slave(clk_i, rst_i, arst_i, adr_i, dat_i, dat_o, sel_i, we_i, stb_
 	
 	// assign output
 	always@(REG_ADR or ctrl or stat or htim or vtim or hvlen or VBARa or VBARb or acmp or
-		cursor0_xy or cursor0_ba or cursor1_xy or cursor1_ba)
+		cursor0_xy or cursor0_ba or cursor1_xy or cursor1_ba or ccr0_dat_o or ccr1_dat_o)
 	casez (REG_ADR) // synopsis full_case parallel_case
 		CTRL_ADR  : reg_dato = ctrl;
 		STAT_ADR  : reg_dato = stat;
